@@ -31,6 +31,7 @@ plot(spatialCoords(spe), pch=".")
 
 # Plot --------------------------------------------------------------------
 
+## Figure 1a
 res <- list("singlecell", 50, 100, 250, 500)
 
 for (i in res) {
