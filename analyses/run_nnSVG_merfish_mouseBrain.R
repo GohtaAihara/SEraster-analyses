@@ -21,7 +21,7 @@ dataset_name <- "merfish_mouseBrain"
 
 # Load dataset ------------------------------------------------------------
 
-spe <- readRDS(file = "outputs/merfish_mouseBrain_preprocessed.RDS")
+spe <- readRDS(file = here("outputs", paste0(dataset_name, "_preprocessed.RDS")))
 
 plot(spatialCoords(spe), pch=".")
 
