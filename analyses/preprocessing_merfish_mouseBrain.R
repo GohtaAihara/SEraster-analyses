@@ -76,11 +76,11 @@ names(vol) <- rownames(meta)
 vol <- vol[good_cells]
 
 hist(log10(vol))
-plot(vol, colSums(gexp))
+plot(vol, colSums(gexp), pch = ".")
 
 par(mfrow=c(2,1))
 hist(log10(colSums(gexp)+1))
-hist(log10(colSums(gexp/vol)+1))
+hist(log10(colSums(gexp/vol*mean(vol))+1))
 
 gexp_lognorm <- log10(gexp/vol + 1)
 
