@@ -108,10 +108,11 @@ hist(nuc_area)
 
 par(mfrow=c(3,1))
 hist(log10(colSums(gexp)+1))
-hist(log10(colSums(gexp/cell_area)+1))
-hist(log10(colSums(gexp/nuc_area)+1))
+hist(log10(colSums(gexp/cell_area*mean(cell_area))+1))
+hist(log10(colSums(gexp/nuc_area*mean(nuc_area))+1))
 
-gexp_lognorm <- log10(gexp/cell_area + 1)
+## normalize by nucleus area
+gexp_lognorm <- log10(gexp/nuc_area*mean(nuc_area) + 1)
 
 calculateDensity(gexp_lognorm)
 
