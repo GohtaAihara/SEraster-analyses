@@ -29,6 +29,7 @@ plot(spatialCoords(spe), pch=".")
 # Run method --------------------------------------------------------------
 
 res_list <- list("singlecell", 50, 100, 200, 400)
+# res_list <- list(50, 100, 200, 400)
 
 ## Run nnSVG once for each resolution
 nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
@@ -234,6 +235,7 @@ for (res in res_list) {
 }
 
 ## Figure 1b (runtime and memory comparison)
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
 
 ## Figure 1c (performance comparison)
 
