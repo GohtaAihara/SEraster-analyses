@@ -14,6 +14,8 @@ library(Matrix)
 library(ggplot2)
 library(nnSVG)
 library(here)
+library(tidyr)
+library(tibble)
 
 par(mfrow=c(1,1))
 
@@ -234,13 +236,187 @@ for (res in res_list) {
   ggsave(plot = plt, filename = here("plots", dataset_name, paste0(dataset_name, "_tot_counts_", i, ".pdf")))
 }
 
+
 ## Figure 1b (runtime and memory comparison)
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
+df$resolution <- factor(df$resolution, levels = c("singlecell", "50", "100", "200", "400"))
+
+# total runtime
+ggplot(df, aes(x = num_points, y = as.numeric(runtime_total), col = resolution)) +
+  geom_boxplot(width = 6000, lwd = 0.75, outlier.shape = NA) +
+  geom_jitter(width = 1000, size = 1, alpha = 0.75) +
+  scale_x_continuous(breaks = unique(df$num_points)) + 
+  labs(title = "Total runtime",
+       x = "Number of spatial points",
+       y = "Runtime (secs)",
+       col = "Resolution") +
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), 
+        panel.grid.minor.y = element_blank(), 
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_total.pdf")), width = 6, heigh = 5, dpi = 300)
+
+# nnSVG runtime
+ggplot(df, aes(x = num_points, y = as.numeric(runtime_nnsvg), col = resolution)) +
+  geom_boxplot(width = 6000, lwd = 0.75, outlier.shape = NA) +
+  geom_jitter(width = 1000, size = 1, alpha = 0.75) +
+  scale_x_continuous(breaks = unique(df$num_points)) + 
+  labs(title = "nnSVG runtime",
+       x = "Number of spatial points",
+       y = "Runtime (secs)",
+       col = "Resolution") +
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), 
+        panel.grid.minor.y = element_blank(), 
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_nnsvg.pdf")), width = 6, heigh = 5, dpi = 300)
+
+# SEraster runtime
+ggplot(df[df$resolution != "singlecell",], aes(x = num_points, y = as.numeric(runtime_rast), col = resolution)) +
+  geom_boxplot(width = 2000, lwd = 0.75, outlier.shape = NA) +
+  geom_jitter(width = 500, size = 1, alpha = 0.75) +
+  scale_x_continuous(breaks = unique(df$num_points)) + 
+  labs(title = "SEraster runtime",
+       x = "Number of spatial points",
+       y = "Runtime (secs)",
+       col = "Resolution") +
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), 
+        panel.grid.minor.y = element_blank(), 
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_rast.pdf")), width = 6, heigh = 5, dpi = 300)
+
 
 ## Figure 1c (performance comparison)
-
-## Figure 1d (nnSVG results correlation)
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
+# set a threshold p value
+alpha <- 0.05
+df_perf <- do.call(rbind, lapply(unique(df$resolution), function(res) {
+  if (res != "singlecell") {
+    sc <- df[df$resolution == "singlecell",]
+    rast <- df[df$resolution == res,]
+    results_sig <- do.call(rbind, lapply(rast$gene, function(gene) {
+      return(data.frame(gene = gene, pixel = rast[rast$gene == gene, "padj"] <= alpha, singlecell = sc[sc$gene == gene, "padj"] <= alpha))
+    }))
+    out <- calculatePerformanceMetrics(results_sig)
+    return(data.frame(resolution = res, out))
+  }
+}))
+df_perf <- df_perf %>%
+  mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400"))) %>%
+  select(resolution, TPR, FPR, PPV, F1, ACC) %>%
+  pivot_longer(!resolution, names_to = "metrics", values_to = "values")
+ggplot(df_perf, aes(x = resolution, y = values, fill = resolution)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  labs(title = "Performance metrics comparison",
+       x = "Resolution",
+       y = "Value",
+       fill = "Resolution") +
+  facet_wrap(~metrics) +
+  theme_bw()
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric.pdf")), width = 6, heigh = 5, dpi = 300)
+
+
+## Figure 1d (nnSVG results comparison)
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
+df <- df %>%
+  mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400"))) %>%
+  select(gene, resolution, phi, prop_sv, LR_stat, rank)
+df <- data.frame(df[df$resolution == "singlecell",], df[df$resolution != "singlecell",])
+
+# compute Spearman correlations
+corr_results <- do.call(rbind, lapply(unique(df$resolution.1), function(res) {
+  temp <- df[df$resolution.1 == res,]
+  return(data.frame(
+    resolution = res,
+    corr_LR_stat = cor(temp$LR_stat, temp$LR_stat.1, method = "spearman"),
+    corr_rank = cor(temp$rank, temp$rank.1, method = "spearman"),
+    corr_prop_sv = cor(temp$prop_sv, temp$prop_sv.1, method = "spearman"),
+    corr_ls = cor(1/temp$phi, 1/temp$phi.1, method = "spearman")
+  ))
+}))
+
+# create Spearman correlation labels
+text_LR_stat <- data.frame(
+  x = 7500,
+  y = 50000,
+  resolution.1 = corr_results$resolution,
+  label = paste0("cor = ", round(corr_results$corr_LR_stat, 3))
+)
+
+text_rank <- data.frame(
+  x = 150,
+  y = 400,
+  resolution.1 = corr_results$resolution,
+  label = paste0("cor = ", round(corr_results$corr_rank, 3))
+)
+
+text_prop_sv <- data.frame(
+  x = 0.25,
+  y = 0.75,
+  resolution.1 = corr_results$resolution,
+  label = paste0("cor = ", round(corr_results$corr_prop_sv, 3))
+)
+
+text_ls <- data.frame(
+  x = 0,
+  y = 6,
+  resolution.1 = corr_results$resolution,
+  label = paste0("cor = ", round(corr_results$corr_ls, 3))
+)
+
+# LR statistic
+ggplot(df, aes(x = LR_stat.1, y = LR_stat, col = resolution.1)) +
+  geom_point(size = 0.8) +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = "dashed") +
+  geom_text(data = text_LR_stat, aes(x = x, y = y, label = label), size = 5, color = "black") +
+  labs(title = "LR statistic single cell vs. rasterization",
+       x = "LR statistic rasterization",
+       y = "LR statistic single cell",
+       col = "Resolution") +
+  facet_wrap(~ resolution.1) +
+  theme_bw()
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_LR_stat.pdf")), width = 6, heigh = 5, dpi = 300)
+
+# rank
+ggplot(df, aes(x = rank.1, y = rank, col = resolution.1)) +
+  geom_point(size = 0.8) +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = "dashed") +
+  geom_text(data = text_rank, aes(x = x, y = y, label = label), size = 5, color = "black") +
+  labs(title = "Rank single cell vs. rasterization",
+       x = "Rank rasterization",
+       y = "Rank single cell",
+       col = "Resolution") +
+  facet_wrap(~ resolution.1) +
+  theme_bw()
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_rank.pdf")), width = 6, heigh = 5, dpi = 300)
+
+# proportion of spatial variance (effect size)
+ggplot(df, aes(x = prop_sv.1, y = prop_sv, col = resolution.1)) +
+  geom_point(size = 0.8) +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = "dashed") +
+  geom_text(data = text_prop_sv, aes(x = x, y = y, label = label), size = 5, color = "black") +
+  labs(title = "Effect size single cell vs. rasterization",
+       x = "Effect size rasterization",
+       y = "Effect size single cell",
+       col = "Resolution") +
+  facet_wrap(~ resolution.1) +
+  theme_bw()
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_effect_size.pdf")), width = 6, heigh = 5, dpi = 300)
+
+# length scale
+ggplot(df, aes(x = log10(1/phi.1), y = log10(1/phi), col = resolution.1)) +
+  geom_point(size = 0.8) +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = "dashed") +
+  geom_text(data = text_ls, aes(x = x, y = y, label = label), size = 5, color = "black") +
+  labs(title = "Length scale single cell vs. rasterization",
+       x = "log10(length scale rasterization)",
+       y = "log10(length scale single cell)",
+       col = "Resolution") +
+  facet_wrap(~ resolution.1) +
+  theme_bw()
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_log10_length_scale.pdf")), width = 6, heigh = 5, dpi = 300)
+
 
 # Further exploration -----------------------------------------------------
 
