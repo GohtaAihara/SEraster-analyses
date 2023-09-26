@@ -73,6 +73,14 @@ ggplot(df, aes(x = x, y = y, col = cluster)) +
   geom_point(size = 0.1) +
   theme_classic()
 
+## nnSVG at single cell
+spe_sub <- nnSVG::nnSVG(
+  spe_sub,
+  assay_name = "lognorm",
+  BPPARAM = BiocParallel::MulticoreParam()
+)
+View(as.data.frame(rowData(spe_sub)))
+
 ## rasterization
 res <- 50
 spe_sub_rast <- SEraster::rasterizeGeneExpression(spe_sub, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
