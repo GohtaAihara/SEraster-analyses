@@ -31,7 +31,6 @@ ggplot(df, aes(x = x, y = y, col = cluster)) +
 
 ct_labels <- colData(spe)$cluster
 
-
 # Run methods -------------------------------------------------------------
 
 res_list <- c(100)

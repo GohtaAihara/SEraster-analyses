@@ -82,7 +82,7 @@ par(mfrow=c(2,1))
 hist(log10(colSums(gexp)+1))
 hist(log10(colSums(gexp/vol*mean(vol))+1))
 
-gexp_lognorm <- log10(gexp/vol*mean(vol) + 1)
+gexp_lognorm <- as(log10(gexp/vol*mean(vol) + 1), "CsparseMatrix")
 
 calculateDensity(gexp_lognorm)
 
