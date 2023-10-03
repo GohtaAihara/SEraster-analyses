@@ -16,6 +16,7 @@ library(nnSVG)
 library(here)
 library(tidyr)
 library(tibble)
+library(dplyr)
 
 par(mfrow=c(1,1))
 
@@ -256,6 +257,19 @@ ggplot(df, aes(x = num_points, y = as.numeric(runtime_total), col = resolution))
         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_total.pdf")), width = 6, heigh = 5, dpi = 300)
 
+ggplot(df, aes(x = resolution, y = as.numeric(runtime_total), col = resolution)) +
+  geom_boxplot(lwd = 0.75, outlier.shape = NA) +
+  geom_jitter(width = 0.1, alpha = 0.75) +
+  labs(title = "Total runtime",
+       x = "Resolution",
+       y = "Runtime (secs)",
+       col = "Resolution") +
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), 
+        panel.grid.minor.y = element_blank(),
+        legend.position = "none")
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_total_v2.pdf")), width = 5, heigh = 5, dpi = 300)
+
 # nnSVG runtime
 ggplot(df, aes(x = num_points, y = as.numeric(runtime_nnsvg), col = resolution)) +
   geom_boxplot(width = 6000, lwd = 0.75, outlier.shape = NA) +
@@ -270,6 +284,19 @@ ggplot(df, aes(x = num_points, y = as.numeric(runtime_nnsvg), col = resolution))
         panel.grid.minor.y = element_blank(), 
         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_nnsvg.pdf")), width = 6, heigh = 5, dpi = 300)
+
+ggplot(df, aes(x = resolution, y = as.numeric(runtime_nnsvg), col = resolution)) +
+  geom_boxplot(lwd = 0.75, outlier.shape = NA) +
+  geom_jitter(width = 0.1, alpha = 0.75) +
+  labs(title = "nnSVG runtime",
+       x = "Resolution",
+       y = "Runtime (secs)",
+       col = "Resolution") +
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), 
+        panel.grid.minor.y = element_blank(),
+        legend.position = "none")
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_nnsvg_v2.pdf")), width = 5, heigh = 5, dpi = 300)
 
 # SEraster runtime
 ggplot(df[df$resolution != "singlecell",], aes(x = num_points, y = as.numeric(runtime_rast), col = resolution)) +
@@ -286,6 +313,18 @@ ggplot(df[df$resolution != "singlecell",], aes(x = num_points, y = as.numeric(ru
         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_rast.pdf")), width = 6, heigh = 5, dpi = 300)
 
+ggplot(df[df$resolution != "singlecell",], aes(x = resolution, y = as.numeric(runtime_rast), col = resolution)) +
+  geom_boxplot(lwd = 0.75, outlier.shape = NA) +
+  geom_jitter(width = 0.1, alpha = 0.75) +
+  labs(title = "SEraster runtime",
+       x = "Resolution",
+       y = "Runtime (secs)",
+       col = "Resolution") +
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), 
+        panel.grid.minor.y = element_blank(),
+        legend.position = "none")
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_rast_v2.pdf")), width = 5, heigh = 5, dpi = 300)
 
 ## Figure 1c (performance comparison)
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
@@ -302,11 +341,12 @@ df_perf <- do.call(rbind, lapply(unique(df$resolution), function(res) {
     return(data.frame(resolution = res, out))
   }
 }))
-df_perf <- df_perf %>%
+df_perf1 <- df_perf %>%
   mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400"))) %>%
   select(resolution, TPR, FPR, PPV, F1, ACC) %>%
   pivot_longer(!resolution, names_to = "metrics", values_to = "values")
-ggplot(df_perf, aes(x = resolution, y = values, fill = resolution)) +
+
+ggplot(df_perf1, aes(x = resolution, y = values, fill = resolution)) +
   geom_bar(stat = "identity", position = position_dodge()) +
   labs(title = "Performance metrics comparison",
        x = "Resolution",
@@ -316,12 +356,29 @@ ggplot(df_perf, aes(x = resolution, y = values, fill = resolution)) +
   theme_bw()
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric.pdf")), width = 6, heigh = 5, dpi = 300)
 
+df_perf2 <- df_perf %>%
+  mutate(resolution = as.numeric(resolution)) %>%
+  select(resolution, TPR, specificity, PPV, F1, ACC) %>%
+  pivot_longer(!resolution, names_to = "metrics", values_to = "values")
+
+ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = unique(df_perf2$resolution)) + 
+  # ylim(0,1) +
+  labs(title = "Performance metrics comparison",
+       x = "Resolution",
+       y = "Performance",
+       col = "Metric") +
+  theme_bw()
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_v2.pdf")), width = 6, heigh = 5, dpi = 300)
+
 
 ## Figure 1d (nnSVG results comparison)
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
 df <- df %>%
   mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400"))) %>%
-  select(gene, resolution, phi, prop_sv, LR_stat, rank)
+  select(gene, resolution, phi, prop_sv, LR_stat, rank, padj)
 df <- data.frame(df[df$resolution == "singlecell",], df[df$resolution != "singlecell",])
 
 # compute Spearman correlations
@@ -332,7 +389,8 @@ corr_results <- do.call(rbind, lapply(unique(df$resolution.1), function(res) {
     corr_LR_stat = cor(temp$LR_stat, temp$LR_stat.1, method = "spearman"),
     corr_rank = cor(temp$rank, temp$rank.1, method = "spearman"),
     corr_prop_sv = cor(temp$prop_sv, temp$prop_sv.1, method = "spearman"),
-    corr_ls = cor(1/temp$phi, 1/temp$phi.1, method = "spearman")
+    corr_ls = cor(1/temp$phi, 1/temp$phi.1, method = "spearman"),
+    corr_padj = cor(temp$padj, temp$padj.1, method = "spearman")
   ))
 }))
 
@@ -363,6 +421,13 @@ text_ls <- data.frame(
   y = 6,
   resolution.1 = corr_results$resolution,
   label = paste0("cor = ", round(corr_results$corr_ls, 3))
+)
+
+text_padj <- data.frame(
+  x = 5,
+  y = 12.5,
+  resolution.1 = corr_results$resolution,
+  label = paste0("cor = ", round(corr_results$corr_padj, 3))
 )
 
 # LR statistic
@@ -416,6 +481,19 @@ ggplot(df, aes(x = log10(1/phi.1), y = log10(1/phi), col = resolution.1)) +
   facet_wrap(~ resolution.1) +
   theme_bw()
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_log10_length_scale.pdf")), width = 6, heigh = 5, dpi = 300)
+
+# adjusted p value
+ggplot(df, aes(x = -log10(padj.1), y = -log10(padj), col = resolution.1)) +
+  geom_point(size = 0.8) +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = "dashed") +
+  geom_text(data = text_padj, aes(x = x, y = y, label = label), size = 5, color = "black") +
+  labs(title = "Adjusted p value single cell vs. rasterization",
+       x = "-log10(padj) rasterization",
+       y = "-log10(padj) single cell",
+       col = "Resolution") +
+  facet_wrap(~ resolution.1) +
+  theme_bw()
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_adjusted_pval.pdf")), width = 6, heigh = 5, dpi = 300)
 
 
 # Further exploration -----------------------------------------------------
