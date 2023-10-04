@@ -26,8 +26,19 @@ dataset_name <- "merfish_mouseBrain"
 
 spe <- readRDS(file = here("outputs", paste0(dataset_name, "_preprocessed.RDS")))
 
-plot(spatialCoords(spe), pch=".")
+plot(spatialCoords(spe), pch=".", asp=1)
 
+pos_orig <- spatialCoords(spe)
+angle_deg <- 90
+
+## rotate around midpoint in both x and y axes
+pos_rotated <- rearrr::rotate_2d(data = data.frame(pos_orig), degrees = angle_deg, x_col = "x", y_col = "y", origin_fn = rearrr::midrange, overwrite = TRUE)
+
+out <- as.matrix(pos_rotated[,c("x_rotated", "y_rotated")])
+colnames(out) <- c("x", "y")
+rownames(out) <- rownames(pos_orig)
+
+plot(out, pch=".", asp=1)
 
 # Run method --------------------------------------------------------------
 
