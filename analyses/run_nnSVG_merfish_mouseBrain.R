@@ -28,17 +28,6 @@ spe <- readRDS(file = here("outputs", paste0(dataset_name, "_preprocessed.RDS"))
 
 plot(spatialCoords(spe), pch=".", asp=1)
 
-pos_orig <- spatialCoords(spe)
-angle_deg <- 90
-
-## rotate around midpoint in both x and y axes
-pos_rotated <- rearrr::rotate_2d(data = data.frame(pos_orig), degrees = angle_deg, x_col = "x", y_col = "y", origin_fn = rearrr::midrange, overwrite = TRUE)
-
-out <- as.matrix(pos_rotated[,c("x_rotated", "y_rotated")])
-colnames(out) <- c("x", "y")
-rownames(out) <- rownames(pos_orig)
-
-plot(out, pch=".", asp=1)
 
 # Run method --------------------------------------------------------------
 
@@ -75,6 +64,49 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
 }))
 saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
 
+## Rotate dataset, rasterize, run nnSVG for each resolution
+n_rotation <- 10
+angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
+
+nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
+  print(paste0("Resolution: ", res))
+  if (res == "singlecell") {
+    num_points = dim(spe)[2]
+    
+    ## nnSVG
+    spe <- nnSVG::nnSVG(
+      spe,
+      assay_name = "lognorm",
+      BPPARAM = BiocParallel::MulticoreParam()
+    )
+    df <- rownames_to_column(as.data.frame(rowData(spe)), var = "gene")
+    return(cbind(rotation_deg = NA, num_points = num_points, df))
+  } else {
+    df <- do.call(rbind, lapply(angle_deg_list, function(deg) {
+      print(paste0("Rotation (degrees): ", deg))
+      ## rotate xy coordinates
+      spe_rotated <- SpatialExperiment::SpatialExperiment(
+        assays = assays(spe),
+        spatialCoords = rotateAroundCenter(spatialCoords(spe), deg)
+      )
+      
+      ## rasterization
+      spe_rast <- SEraster::rasterizeGeneExpression(spe_rotated, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+      num_points = dim(spe_rast)[2]
+      
+      ## nnSVG
+      spe_rast <- nnSVG::nnSVG(
+        spe_rast,
+        assay_name = "pixelval",
+        BPPARAM = BiocParallel::MulticoreParam()
+      )
+      temp <- rownames_to_column(as.data.frame(rowData(spe_rast)), var = "gene")
+      return(cbind(rotation_deg = deg, num_points = num_points, temp))
+    }))
+  }
+  return(data.frame(dataset = dataset_name, resolution = res, df))
+}))
+saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
 
 ## Measure runtime for each resolution
 n_itr <- 5
@@ -506,8 +538,29 @@ ggplot(df, aes(x = -log10(padj.1), y = -log10(padj), col = resolution.1)) +
   theme_bw()
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_adjusted_pval.pdf")), width = 6, heigh = 5, dpi = 300)
 
-
 # Further exploration -----------------------------------------------------
+
+## mean-variance relationship
+resolution <- 200
+spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = resolution, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+df_sc_counts <- data.frame(mean = rowMeans(assay(spe, "counts")), var = apply(assay(spe, "counts"), 1, var), dataset = "single cell (counts)")
+df_sc_counts <- rownames_to_column(df_sc_counts,  var = "gene")
+df_sc_lognorm <- data.frame(mean = rowMeans(assay(spe, "lognorm")), var = apply(assay(spe, "lognorm"), 1, var), dataset = "single cell (lognorm)")
+df_sc_lognorm <- rownames_to_column(df_sc_lognorm,  var = "gene")
+res_list <- c(50, 100, 200, 400)
+df_rast <- do.call(rbind, lapply(res_list, function(res) {
+  spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+  out <- data.frame(mean = rowMeans(assay(spe_rast, "pixelval")), var = apply(assay(spe_rast, "pixelval"), 1, var), dataset = paste0("resolution = ", res))
+  out <- rownames_to_column(out, var = "gene")
+  return(out)
+}))
+df_comb <- rbind(df_sc_counts, df_sc_lognorm, df_rast) %>%
+  mutate(dataset = factor(dataset, levels = c("single cell (counts)", "single cell (lognorm)", "resolution = 50", "resolution = 100", "resolution = 200", "resolution = 400")))
+ggplot(df_comb, aes(x = log10(mean), y = log10(var), col = dataset)) +
+  geom_point(size = 0.5) +
+  geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
+  labs(title = "Comparison of mean-variance relationship") +
+  theme_classic()
 
 res <- 400
 spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "sum", BPPARAM = BiocParallel::MulticoreParam())
@@ -526,3 +579,75 @@ spe_rast <- nnSVG::nnSVG(
   BPPARAM = BiocParallel::MulticoreParam()
 )
 View(as.data.frame(rowData(spe_rast)))
+
+## bugfix
+n_rotation <- 20
+angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
+res_list <- list(50, 100, 200, 400)
+
+nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
+  print(paste0("Resolution: ", res))
+  if (res == "singlecell") {
+    num_points = dim(spe)[2]
+    
+    ## nnSVG
+    spe <- nnSVG::nnSVG(
+      spe,
+      assay_name = "lognorm",
+      BPPARAM = BiocParallel::MulticoreParam()
+    )
+    df <- rownames_to_column(as.data.frame(rowData(spe)), var = "gene")
+    return(cbind(rotation_deg = NA, num_points = num_points, df))
+  } else {
+    df <- do.call(rbind, lapply(angle_deg_list, function(deg) {
+      print(paste0("Rotation (degrees): ", deg))
+      ## rotate xy coordinates
+      spe_rotated <- SpatialExperiment::SpatialExperiment(
+        assays = assays(spe),
+        spatialCoords = rotateAroundCenter(spatialCoords(spe), deg)
+      )
+      
+      ## rasterization
+      spe_rast <- SEraster::rasterizeGeneExpression(spe_rotated, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+      num_points = dim(spe_rast)[2]
+      
+      ## nnSVG
+      spe_rast <- nnSVG::nnSVG(
+        spe_rast,
+        assay_name = "pixelval",
+        BPPARAM = BiocParallel::MulticoreParam()
+      )
+      temp <- rownames_to_column(as.data.frame(rowData(spe_rast)), var = "gene")
+      return(cbind(rotation_deg = deg, num_points = num_points, temp))
+    }))
+  }
+  return(data.frame(dataset = dataset_name, resolution = res, df))
+}))
+
+## nnSVG failed at 270 degrees
+## rotate xy coordinates
+deg <- angle_deg_list[18]
+deg
+spe_rotated <- SpatialExperiment::SpatialExperiment(
+  assays = assays(spe),
+  spatialCoords = rotateAroundCenter(spatialCoords(spe), deg)
+)
+plot(spatialCoords(spe_rotated), pch=".", asp=1)
+
+## rasterization
+res <- 50
+spe_rast <- SEraster::rasterizeGeneExpression(spe_rotated, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+num_points = dim(spe_rast)[2]
+gene <- "Baiap2"
+df <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], gene = assay(spe_rast)[gene,])
+ggplot(df, aes(x = x, y = y, fill = gene)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  theme_classic()
+
+## nnSVG
+spe_rast <- nnSVG::nnSVG(
+  spe_rast,
+  assay_name = "pixelval",
+  BPPARAM = BiocParallel::MulticoreParam()
+)
