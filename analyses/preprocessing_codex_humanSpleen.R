@@ -42,6 +42,7 @@ gexp <- t(gexp)
 data("pkhl")
 meta <- pkhl
 pos <- cbind(meta$x, meta$y)
+colnames(pos) <- c("x", "y")
 
 colnames(gexp) <- rownames(meta) <- rownames(pos) <- paste0("cell-", colnames(gexp))
 

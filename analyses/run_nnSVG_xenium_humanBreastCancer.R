@@ -33,7 +33,9 @@ ct_labels <- colData(spe)$cluster
 
 # Run methods -------------------------------------------------------------
 
-res_list <- c(100)
+res_list <- c(50, 100, 200, 400)
+
+# ct_labels <- factor(c(1,16), levels = c(1, 16))
 
 nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
   out <- do.call(rbind, lapply(levels(ct_labels), function(ct_label) {
@@ -45,13 +47,24 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
     spe_sub_rast <- SEraster::rasterizeGeneExpression(spe_sub, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
     
     ## nnSVG
-    spe_sub_rast <- nnSVG::nnSVG(
+    ## using try() to handle error
+    spe_sub_rast_nnsvg <- try({nnSVG::nnSVG(
       spe_sub_rast,
       assay_name = "pixelval",
       BPPARAM = BiocParallel::MulticoreParam()
-    )
-    df <- tibble::rownames_to_column(as.data.frame(rowData(spe_sub_rast)), var = "gene")
-    return(data.frame(cluster = ct_label, df))
+    )})
+    
+    if (class(spe_sub_rast_nnsvg) == "try-error") {
+      ## do not save anything for clusters that caused error in nnSVG
+      return(NULL)
+    } else {
+      df <- tibble::rownames_to_column(as.data.frame(rowData(spe_sub_rast_nnsvg)), var = "gene")
+      return(data.frame(
+        cluster = ct_label, 
+        num_cells = dim(spe_sub)[2], 
+        num_pixels = dim(spe_sub_rast)[2], 
+        df))
+    }
   }))
   return(cbind(dataset = dataset_name, resolution = res, out))
 }))
@@ -62,7 +75,7 @@ saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_ct_sp
 # Further exploration -----------------------------------------------------
 
 ## filter by cluster --> rasterize --> nnSVG
-ct_label <- 16
+ct_label <- 1
 
 ## subset cluster of interest
 spe_sub <- spe[,spe$cluster == ct_label]
@@ -73,15 +86,16 @@ ggplot(df, aes(x = x, y = y, col = cluster)) +
   theme_classic()
 
 ## nnSVG at single cell
-spe_sub <- nnSVG::nnSVG(
-  spe_sub,
-  assay_name = "lognorm",
-  BPPARAM = BiocParallel::MulticoreParam()
-)
-View(as.data.frame(rowData(spe_sub)))
+# spe_sub <- nnSVG::nnSVG(
+#   spe_sub,
+#   assay_name = "lognorm",
+#   BPPARAM = BiocParallel::MulticoreParam(),
+#   verbose = TRUE
+# )
+# View(as.data.frame(rowData(spe_sub)))
 
 ## rasterization
-res <- 50
+res <- 25
 spe_sub_rast <- SEraster::rasterizeGeneExpression(spe_sub, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
 dim(spe_sub_rast)
 
@@ -92,12 +106,13 @@ ggplot(df, aes(x = x, y = y, fill = transcripts)) +
   theme_classic()
 
 ## nnSVG
-spe_sub_rast <- nnSVG::nnSVG(
+spe_sub_rast <- try({nnSVG::nnSVG(
   spe_sub_rast,
   assay_name = "pixelval",
   BPPARAM = BiocParallel::MulticoreParam()
-)
-View(as.data.frame(rowData(spe_sub_rast)))
+)})
+df <- tibble::rownames_to_column(as.data.frame(rowData(spe_sub_rast)), var = "gene")
+View(df)
 
 ## visual inspection
 gene <- "SERPINA3"

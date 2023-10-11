@@ -80,7 +80,7 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
       BPPARAM = BiocParallel::MulticoreParam()
     )
     df <- rownames_to_column(as.data.frame(rowData(spe)), var = "gene")
-    return(cbind(rotation_deg = NA, num_points = num_points, df))
+    df <- cbind(rotation_deg = NA, num_points = num_points, df)
   } else {
     df <- do.call(rbind, lapply(angle_deg_list, function(deg) {
       print(paste0("Rotation (degrees): ", deg))
@@ -101,7 +101,8 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
         BPPARAM = BiocParallel::MulticoreParam()
       )
       temp <- rownames_to_column(as.data.frame(rowData(spe_rast)), var = "gene")
-      return(cbind(rotation_deg = deg, num_points = num_points, temp))
+      temp <- cbind(rotation_deg = deg, num_points = num_points, temp)
+      return(temp)
     }))
   }
   return(data.frame(dataset = dataset_name, resolution = res, df))
@@ -416,6 +417,53 @@ ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
   theme_bw()
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_v2.pdf")), width = 6, heigh = 5, dpi = 300)
 
+## performance comparison with rotations
+n_rotation <- 10
+angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+# set a threshold p value
+alpha <- 0.05
+df_perf <- do.call(rbind, lapply(unique(df$resolution), function(res) {
+  if (res != "singlecell") {
+    sc <- df[df$resolution == "singlecell",]
+    out <- do.call(rbind, lapply(angle_deg_list, function(deg) {
+      rast <- df[df$resolution == res & df$rotation_deg == deg,]
+      results_sig <- do.call(rbind, lapply(rast$gene, function(gene) {
+        return(data.frame(gene = gene, pixel = rast[rast$gene == gene, "padj"] <= alpha, singlecell = sc[sc$gene == gene, "padj"] <= alpha))
+      }))
+      out <- calculatePerformanceMetrics(results_sig)
+      return(data.frame(rotation_deg = deg, out))
+    }))
+    return(data.frame(resolution = res, out))
+  }
+}))
+
+df_perf_raw <- df_perf %>%
+  mutate(resolution = as.numeric(resolution)) %>%
+  select(resolution, rotation_deg, TPR, specificity, PPV, F1, ACC) %>%
+  pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values")
+
+df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
+  out <- do.call(rbind, lapply(c("TPR", "specificity", "PPV", "F1", "ACC"), function(metric) {
+    temp <- df_perf[df_perf$resolution == res, metric]
+    return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
+  }))
+  return(data.frame(resolution = as.numeric(res), out))
+}))
+
+ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
+  # geom_jitter(width = 10, alpha = 0.3) +
+  geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
+  geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
+  geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics), width = 10) +
+  scale_x_continuous(breaks = unique(df_perf2$resolution)) + 
+  ylim(0,1) +
+  labs(title = "Performance metrics comparison",
+       x = "Resolution",
+       y = "Performance",
+       col = "Metric") +
+  theme_bw()
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary.pdf")), width = 6, heigh = 5, dpi = 300)
 
 ## Figure 1d (nnSVG results comparison)
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
