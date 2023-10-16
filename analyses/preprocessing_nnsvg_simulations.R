@@ -40,7 +40,11 @@ for (i in sim_names) {
   plot(spatialCoords(spe), pch=".", main=i)
   
   ## modify
-  ## no modification
+  ## add gene names
+  rownames(spe) <- paste0("gene", seq(dim(spe)[1]))
+  ## add cell IDs
+  colnames(spe) <- paste0("cell", seq(dim(spe)[2]))
+  rownames(spatialCoords(spe)) <- paste0("cell", seq(dim(spe)[2]))
   
   saveRDS(spe, file = here(dir_output, paste0("spe_", i, ".RDS")))
 }

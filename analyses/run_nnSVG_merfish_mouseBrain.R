@@ -267,7 +267,7 @@ for (res in res_list) {
       coord_fixed() +
       geom_tile() +
       scale_fill_viridis_c() +
-      labs(title = paste0("Resolution = ", i, " um")) +
+      labs(title = paste0("Resolution = ", res, " um")) +
       theme_bw() +
       theme(
         legend.position="none",
@@ -278,7 +278,7 @@ for (res in res_list) {
       )
   }
   ## save plot
-  ggsave(plot = plt, filename = here("plots", dataset_name, paste0(dataset_name, "_tot_counts_", i, ".pdf")))
+  ggsave(plot = plt, filename = here("plots", dataset_name, paste0(dataset_name, "_tot_counts_", res, ".pdf")))
 }
 
 

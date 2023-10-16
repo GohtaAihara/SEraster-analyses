@@ -116,7 +116,7 @@ gexp_lognorm <- as(log10(gexp/nuc_area*mean(nuc_area) + 1), "CsparseMatrix")
 
 calculateDensity(gexp_lognorm)
 
-# format into SpatialExperiment class -------------------------------------
+# Format into SpatialExperiment class -------------------------------------
 
 coldata <- clusters[rownames(clusters) %in% good_cells,"Cluster", drop = FALSE]
 colnames(coldata) <- c("cluster")
