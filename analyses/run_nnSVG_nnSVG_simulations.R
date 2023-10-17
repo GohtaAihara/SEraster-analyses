@@ -124,7 +124,7 @@ for (i in sim_names) {
   }))
   saveRDS(nnsvg_results, file = here("outputs", dataset_name, paste0(i, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
 }
-
+ 
 
 # Plot --------------------------------------------------------------------
 
