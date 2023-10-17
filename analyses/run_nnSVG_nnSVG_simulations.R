@@ -50,7 +50,7 @@ sim_names <- c(
 # Run method -------------------------------------------------------------
 
 ## iterate over 1. dataset, 2. resolution, 3. rotation (save everything in one df for each dataset)
-res_list <- c(list("singlecell"), as.list(seq(0.01, 0.09, by = 0.01)))
+res_list <- c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01)))
 # res_list <- list("singlecell", 0.09)
 n_rotation <- 10
 angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
@@ -74,17 +74,21 @@ for (i in sim_names) {
           spatialCoords = rotateAroundCenter(spatialCoords(spe), deg)
         )
         
-        num_points = dim(spe_rotated)[2]
-        
         ## nnSVG
-        spe_rotated <- nnSVG::nnSVG(
+        spe_rotated_nnsvg <- try({nnSVG::nnSVG(
           spe_rotated,
           assay_name = "logcounts",
           BPPARAM = BiocParallel::MulticoreParam()
-        )
-        temp <- rownames_to_column(as.data.frame(rowData(spe_rotated)), var = "gene")
-        temp <- cbind(rotation_deg = deg, num_points = num_points, temp)
-        return(temp)
+        )})
+        
+        if (class(spe_rotated_nnsvg) == "try-error") {
+          ## do not save anything for dataset/resolution/rotation that caused error in nnSVG
+          return(NULL)
+        } else {
+          temp <- rownames_to_column(as.data.frame(rowData(spe_rotated_nnsvg)), var = "gene")
+          temp <- cbind(rotation_deg = deg, num_pixels = dim(spe_rotated)[2], temp)
+          return(temp)
+        }
       }))
     } else {
       ## iterate over rotations (rasterization)
@@ -98,17 +102,22 @@ for (i in sim_names) {
         
         ## rasterization
         spe_rast <- SEraster::rasterizeGeneExpression(spe_rotated, assay_name = "logcounts", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
-        num_points = dim(spe_rast)[2]
         
         ## nnSVG
-        spe_rast <- nnSVG::nnSVG(
+        spe_rast_nnsvg <- try({nnSVG::nnSVG(
           spe_rast,
           assay_name = "pixelval",
           BPPARAM = BiocParallel::MulticoreParam()
-        )
-        temp <- rownames_to_column(as.data.frame(rowData(spe_rast)), var = "gene")
-        temp <- cbind(rotation_deg = deg, num_points = num_points, temp)
-        return(temp)
+        )})
+        
+        if (class(spe_rast_nnsvg) == "try-error") {
+          ## do not save anything for dataset/resolution/rotation that caused error in nnSVG
+          return(NULL)
+        } else {
+          temp <- rownames_to_column(as.data.frame(rowData(spe_rast_nnsvg)), var = "gene")
+          temp <- cbind(rotation_deg = deg, num_pixels = dim(spe_rast)[2], temp)
+          return(temp)
+        }
       }))
     }
     return(data.frame(dataset = i, resolution = res, df))
