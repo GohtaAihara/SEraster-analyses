@@ -103,6 +103,32 @@ saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_ct_sp
 
 # Plot --------------------------------------------------------------------
 
+## Figure
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
+
+## count the number of s.s. SVGs
+alpha <- 0.05
+sum(df$padj <= 0.05) ## 379 at resolution = 100 (all genes are SVGs)
+
+## visual inspection of top SVGs (based on rank from nnSVG)
+df <- df[order(df$rank, decreasing = FALSE),]
+top_svgs <- df[1:5,]$gene
+
+res <- 100
+spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+plt_list <- list()
+for (i in 1:length(top_svgs)) {
+  print(paste0("Gene = ", top_svgs[i]))
+  df <- data.frame(spatialCoords(spe_rast), colData(spe_rast), gene = assay(spe_rast)[top_svgs[i],])
+  plt_list[[i]] <- ggplot(df, aes(x = x, y = y, fill = gene)) +
+    geom_tile() +
+    scale_fill_viridis_c() +
+    theme_classic()
+}
+
+## concordance of cluster-specific DEGs and nnSVGs
+## load DEG analysis
+df_deg <- read.csv("~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/Xenium_mousePup/analysis/diffexp/gene_expression_graphclust/differential_expression.csv")
 
 
 # Further exploration -----------------------------------------------------
