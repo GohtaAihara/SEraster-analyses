@@ -99,3 +99,40 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
 }))
 ## save results
 saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific.RDS")))
+
+
+# Plot --------------------------------------------------------------------
+
+
+
+# Further exploration -----------------------------------------------------
+
+ct_label <- 2
+spe_sub <- spe[,spe$cluster == ct_label]
+
+df <- data.frame(spatialCoords(spe_sub), colData(spe_sub))
+ggplot(df, aes(x = x, y = y, col = cluster)) +
+  geom_point(size = 0.1) +
+  theme_classic()
+
+## rasterization
+res <- 100
+spe_sub_rast <- SEraster::rasterizeGeneExpression(spe_sub, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+
+df <- data.frame(spatialCoords(spe_sub_rast), colData(spe_sub_rast), transcripts = colMeans(assay(spe_sub_rast)))
+ggplot(df, aes(x = x, y = y, fill = transcripts)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  theme_classic()
+
+## nnSVG
+## using try() to handle error
+start <- Sys.time()
+spe_sub_rast_nnsvg <- try({nnSVG::nnSVG(
+  spe_sub_rast,
+  assay_name = "pixelval",
+  BPPARAM = BiocParallel::MulticoreParam()
+)})
+difftime(Sys.time(), start)
+
+rowData(spe_sub_rast_nnsvg)
