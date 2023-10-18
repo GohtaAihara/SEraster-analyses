@@ -23,16 +23,16 @@ calculatePerformanceMetrics <- function(input) {
   TN = 0
   FN = 0
   for (i in input$gene) {
-    result.px <- input$pixel[input$gene == (i)]
-    result.sc <- input$singlecell[input$gene == (i)]
+    result.pred <- input$pred[input$gene == (i)]
+    result.obs <- input$obs[input$gene == (i)]
     
-    if (result.px == TRUE && result.sc == result.px) {
+    if (result.pred == TRUE && result.obs == result.pred) {
       TP <- TP + 1
-    } else if (result.px == TRUE && result.sc != result.px) {
+    } else if (result.pred == TRUE && result.obs != result.pred) {
       FP <- FP + 1
-    } else if (result.px == FALSE && result.sc == result.px) {
+    } else if (result.pred == FALSE && result.obs == result.pred) {
       TN <- TN + 1
-    } else if (result.px == FALSE && result.sc != result.px) {
+    } else if (result.pred == FALSE && result.obs != result.pred) {
       FN <- FN + 1
     }
     # matrix(c(TP,FN,FP,TN), nrow = 2, ncol = 2)

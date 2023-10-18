@@ -13,7 +13,6 @@ library(SpatialExperiment)
 library(Matrix)
 library(ggplot2)
 library(gridExtra)
-library(rhdf5)
 library(here)
 
 par(mfrow=c(1,1))
@@ -61,7 +60,7 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
     )
     df <- tibble::rownames_to_column(as.data.frame(rowData(spe_rast)), var = "gene")
   }
-  return(data.frame(dataset = dataset_name, resolution = res, num_points = num_points, df))
+  return(data.frame(dataset = dataset_name, resolution = res, num_cells = dim(spe)[2], num_pixels = dim(spe_rast)[2], df))
 }))
 ## save results
 saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))

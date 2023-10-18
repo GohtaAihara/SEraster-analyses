@@ -179,9 +179,103 @@ for (i in sim_names) {
 }
 
 ## Figure (performance comparison)
-i <- sim_names[2]
-n_rotation <- 2
+sim_names <- c(
+  "sim_largeBandwidth_fullExpr",
+  "sim_largeBandwidth_medExpr",
+  "sim_largeBandwidth_lowExpr",
+  "sim_medBandwidth_fullExpr",
+  "sim_medBandwidth_medExpr",
+  "sim_medBandwidth_lowExpr",
+  "sim_smallBandwidth_fullExpr",
+  "sim_smallBandwidth_medExpr",
+  "sim_smallBandwidth_lowExpr"
+)
+
+# sim_names <- c(
+#   "sim_largeBandwidth_fullExpr",
+#   "sim_largeBandwidth_medExpr",
+#   "sim_largeBandwidth_lowExpr"
+# )
+i <- sim_names[1]
+n_rotation <- 10
+spe <- readRDS(file = here(dir, paste0("spe_", i, ".RDS")))
 df <- readRDS(file = here("outputs", dataset_name, paste0(i, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+temp <- df[df$resolution == "0.01" & df$rotation_deg == 36,]
+results_sig <- data.frame(gene = temp$gene, pred = temp$padj <= alpha, obs = rowData(spe)$expressed)
+calculatePerformanceMetrics(results_sig)
+
+# set a threshold p value
+alpha <- 0.05
+angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
+df_perf <- do.call(rbind, lapply(sim_names, function(i) {
+  ## load original spe to get T/F labels
+  spe <- readRDS(file = here(dir, paste0("spe_", i, ".RDS")))
+  ## load nnSVG results
+  df <- readRDS(file = here("outputs", dataset_name, paste0(i, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+  
+  out <- do.call(rbind, lapply(unique(df$resolution), function(res) {
+    temp <- df[df$resolution == res,]
+    out2 <- do.call(rbind, lapply(unique(temp$rotation_deg), function(deg) {
+      temp2 <- temp[temp$rotation_deg == deg,]
+      results_sig <- data.frame(gene = temp2$gene, pred = temp2$padj <= alpha, obs = rowData(spe)$expressed)
+      perf <- calculatePerformanceMetrics(results_sig)
+      return(data.frame(rotation_deg = deg, perf))
+    }))
+    return(data.frame(resolution = res, out2))
+  }))
+  return(data.frame(dataset = i, out))
+}))
+
+df_perf_raw <- df_perf %>%
+  mutate(resolution = factor(resolution, levels = c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01))))) %>%
+  select(dataset, resolution, rotation_deg, TPR, specificity, PPV, F1, ACC) %>%
+  pivot_longer(!c(dataset, resolution, rotation_deg), names_to = "metrics", values_to = "values")
+
+df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
+  out <- do.call(rbind, lapply(unique(df_perf$dataset), function(dataset) {
+    out2 <- do.call(rbind, lapply(c("TPR", "specificity", "PPV", "F1", "ACC"), function(metric) {
+      temp <- df_perf[df_perf$dataset == dataset & df_perf$resolution == res, metric]
+      return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
+    }))
+    return(data.frame(dataset = dataset, resolution = factor(res, levels = c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01)))), out2))
+  }))
+}))
+
+df_perf_summary2 <- df_perf_summary
+df_perf_summary2$resolution <- sub("singlecell", 0, df_perf_summary2$resolution)
+df_perf_summary2$resolution <- as.numeric(df_perf_summary2$resolution)
+
+ggplot(df_perf_raw, aes(x = resolution, y = values, col = metrics)) +
+  facet_wrap(~dataset) +
+  # geom_jitter(width = 10, alpha = 0.3) +
+  # geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
+  geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
+  geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics)) +
+  # scale_x_discrete(breaks = unique(df_perf_raw$resolution)) + 
+  ylim(0,1) +
+  labs(title = "Performance metrics comparison",
+       x = "Resolution",
+       y = "Performance",
+       col = "Metric") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary.pdf")), width = 8, heigh = 8, dpi = 300)
+
+ggplot(df_perf_raw, aes(x = resolution, y = values, col = metrics)) +
+  facet_wrap(~dataset) +
+  # geom_jitter(width = 10, alpha = 0.3) +
+  geom_line(data = df_perf_summary2, aes(x = resolution, y = mean, col = metrics)) +
+  geom_point(data = df_perf_summary2, aes(x = resolution, y = mean, col = metrics), size = 1) +
+  geom_errorbar(data = df_perf_summary2, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics)) +
+  scale_x_continuous(breaks = unique(df_perf_summary2$resolution)) +
+  ylim(0,1) +
+  labs(title = "Performance metrics comparison",
+       x = "Resolution",
+       y = "Performance",
+       col = "Metric") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary_v2.pdf")), width = 8, heigh = 8, dpi = 300)
 
 # Further exploration -----------------------------------------------------
 
