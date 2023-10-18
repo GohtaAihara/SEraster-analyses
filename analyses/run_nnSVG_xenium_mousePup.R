@@ -11,9 +11,13 @@ source("analyses/functions.R")
 
 library(SpatialExperiment)
 library(Matrix)
+library(R.utils)
 library(ggplot2)
 library(gridExtra)
 library(here)
+library(tidyr)
+library(tibble)
+library(dplyr)
 
 par(mfrow=c(1,1))
 
@@ -32,7 +36,7 @@ ct_labels <- colData(spe)$cluster
 
 # Run methods -------------------------------------------------------------
 
-res_list <- list(100)
+res_list <- list(50, 100, 200, 400)
 
 ## Global nnSVG
 nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
@@ -67,7 +71,9 @@ saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_globa
 
 ## cluster-specific nnSVG
 nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
+  print(paste0("Resolution = ", res))
   out <- do.call(rbind, lapply(levels(ct_labels), function(ct_label) {
+    print(paste0("Cluster = ", ct_label))
     ## subset cluster of interest
     spe_sub <- spe[,spe$cluster == ct_label]
     print(paste0("# of cells in cluster ", ct_label, " : ", dim(spe_sub)[2]))
@@ -77,11 +83,17 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
     
     ## nnSVG
     ## using try() to handle error
-    spe_sub_rast_nnsvg <- try({nnSVG::nnSVG(
-      spe_sub_rast,
-      assay_name = "pixelval",
-      BPPARAM = BiocParallel::MulticoreParam()
-    )})
+    spe_sub_rast_nnsvg <- try({
+      withTimeout(
+        {nnSVG::nnSVG(
+          spe_sub_rast,
+          assay_name = "pixelval",
+          BPPARAM = BiocParallel::MulticoreParam()
+        )},
+        timeout = 1800,
+        onTimeout = c("error")
+      )
+    })
     
     if (class(spe_sub_rast_nnsvg) == "try-error") {
       ## do not save anything for clusters that caused error in nnSVG
@@ -103,28 +115,39 @@ saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_ct_sp
 
 # Plot --------------------------------------------------------------------
 
-## Figure
+## Figure (visual inspection of top SVGs (based on rank from nnSVG))
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
 
 ## count the number of s.s. SVGs
 alpha <- 0.05
 sum(df$padj <= 0.05) ## 379 at resolution = 100 (all genes are SVGs)
 
-## visual inspection of top SVGs (based on rank from nnSVG)
-df <- df[order(df$rank, decreasing = FALSE),]
-top_svgs <- df[1:5,]$gene
-
 res <- 100
 spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
-plt_list <- list()
-for (i in 1:length(top_svgs)) {
-  print(paste0("Gene = ", top_svgs[i]))
-  df <- data.frame(spatialCoords(spe_rast), colData(spe_rast), gene = assay(spe_rast)[top_svgs[i],])
-  plt_list[[i]] <- ggplot(df, aes(x = x, y = y, fill = gene)) +
-    geom_tile() +
-    scale_fill_viridis_c() +
-    theme_classic()
-}
+
+num_rank <- 25
+df_ranked <- df[order(df$rank, decreasing = FALSE),]
+top_svgs <- df_ranked[1:num_rank,]$gene
+df_plt <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], as.matrix(t(assay(spe_rast)[top_svgs,]))) %>%
+  pivot_longer(!c(x, y), names_to = "gene", values_to = "exp")
+ggplot(df_plt, aes(x = x, y = y, fill = exp)) +
+  facet_wrap(~ gene) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "gene expression") +
+  labs(title = paste0("Top ", num_rank, " SVGs based on nnSVG rank")) +
+  theme_bw()
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_nnsvg_global_top_", num_rank, "_svgs.pdf")), width = 8, heigh = 8, dpi = 300)
+
+bottom_svgs <- df_ranked[(dim(df_ranked)[1]-num_rank+1):dim(df_ranked)[1],]$gene
+df_plt <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], as.matrix(t(assay(spe_rast)[bottom_svgs,]))) %>%
+  pivot_longer(!c(x, y), names_to = "gene", values_to = "exp")
+ggplot(df_plt, aes(x = x, y = y, fill = exp)) +
+  facet_wrap(~ gene) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "gene expression") +
+  labs(title = paste0("Bottom ", num_rank, " SVGs based on nnSVG rank")) +
+  theme_bw()
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_nnsvg_global_bottom_", num_rank, "_svgs.pdf")), width = 8, heigh = 8, dpi = 300)
 
 ## concordance of cluster-specific DEGs and nnSVGs
 ## load DEG analysis
@@ -133,7 +156,18 @@ df_deg <- read.csv("~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta 
 
 # Further exploration -----------------------------------------------------
 
-ct_label <- 2
+## plot the number of cells in each cluster
+barplot(table(colData(spe)$cluster),
+        xlab = "Cluster",
+        ylab = "Number of cells")
+
+## plot the proportion of each cluster
+barplot(prop.table(table(colData(spe)$cluster)),
+        xlab = "Cluster",
+        ylab = "% of cells")
+
+## run nnSVG on specific cluster
+ct_label <- 1
 spe_sub <- spe[,spe$cluster == ct_label]
 
 df <- data.frame(spatialCoords(spe_sub), colData(spe_sub))
@@ -152,13 +186,16 @@ ggplot(df, aes(x = x, y = y, fill = transcripts)) +
   theme_classic()
 
 ## nnSVG
-## using try() to handle error
-start <- Sys.time()
-spe_sub_rast_nnsvg <- try({nnSVG::nnSVG(
-  spe_sub_rast,
-  assay_name = "pixelval",
-  BPPARAM = BiocParallel::MulticoreParam()
-)})
-difftime(Sys.time(), start)
-
-rowData(spe_sub_rast_nnsvg)
+## using try() to handle error and withTimeout() to handle when nnSVG takes forever to run
+nnsvg_output <- try({
+  withTimeout(
+    {nnSVG::nnSVG(
+      spe_sub_rast,
+      assay_name = "pixelval",
+      BPPARAM = BiocParallel::MulticoreParam()
+    )},
+    timeout = 1800,
+    onTimeout = c("error")
+  )
+})
+class(nnsvg_output)
