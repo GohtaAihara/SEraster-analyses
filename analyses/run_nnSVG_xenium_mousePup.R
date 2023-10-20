@@ -21,7 +21,8 @@ library(dplyr)
 
 par(mfrow=c(1,1))
 
-dataset_name = "xenium_mousePup"
+dataset_name <- "xenium_mousePup"
+method <- "nnSVG"
 
 # Load dataset ------------------------------------------------------------
 
@@ -149,9 +150,58 @@ ggplot(df_plt, aes(x = x, y = y, fill = exp)) +
   theme_bw()
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_nnsvg_global_bottom_", num_rank, "_svgs.pdf")), width = 8, heigh = 8, dpi = 300)
 
-## concordance of cluster-specific DEGs and nnSVGs
+## Figure (deg analysis)
 ## load DEG analysis
 df_deg <- read.csv("~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/Xenium_mousePup/analysis/diffexp/gene_expression_graphclust/differential_expression.csv")
+rownames(df_deg) <- df_deg$Feature.Name
+
+## input organ-specific genes suggested by 10X Genomics (https://www.10xgenomics.com/resources/datasets/mouse-pup-preview-data-xenium-mouse-tissue-atlassing-panel-1-standard)
+marker_genes <- list(
+  Brain = c("Gfap"),
+  Kidney = c("Lrp2"),
+  Pancreas = c("Tm4sf4", "Dcdc2a"),
+  Liver = c("Clec4f", "Folr2"),
+  Lung = c("Mfap2", "Sod3"),
+  Heart = c("Pln", "Trdnepi"),
+  Skin = c("Dsc3", "Sbsn"),
+  Colon = c("Cdhr5", "Rbp2"),
+  Thymus = c("Arpp21", "Cd8a")
+)
+
+df_marker_genes <- marker_genes %>%
+  enframe(name = "organ", value = "gene") %>%
+  unnest(gene) %>%
+  mutate(gene = factor(gene, levels = unlist(marker_genes))) %>%
+  as.data.frame()
+## some marker genes don't exist in the dataset
+df_marker_genes <- df_marker_genes[df_marker_genes$gene %in% rownames(spe),]
+
+df_plt <- do.call(rbind, lapply(levels(ct_labels), function(ct_label) {
+  ## subset by cluster
+  spe_sub <- spe[,spe$cluster == ct_label]
+  df_deg_sub <- df_deg[,grepl(paste0("Cluster.", ct_label, "."), colnames(df_deg), fixed = TRUE)]
+  
+  ## compute metrics
+  out <- do.call(rbind, lapply(seq(dim(df_marker_genes)[1]), function(idx) {
+    gene <- df_marker_genes[idx,]$gene
+    return(data.frame(
+      cluster = factor(ct_label, levels = levels(ct_labels)),
+      organ = df_marker_genes[idx,]$organ,
+      gene = factor(gene, levels = levels(df_marker_genes$gene)),
+      mean_counts = mean(assay(spe_sub, "counts")[gene,]),
+      mean_lognorm = mean(assay(spe_sub, "lognorm")[gene,]),
+      fraction = mean(assay(spe_sub, "counts")[gene,] > 0)*100,
+      log2fc = df_deg_sub[gene,grepl("Log2.fold.change", colnames(df_deg_sub))],
+      padj = df_deg_sub[gene,grepl("Adjusted.p.value", colnames(df_deg_sub))]
+    ))
+  }))
+}))
+
+ggplot(df_plt, aes(x = gene, y = cluster, col = padj, size = fraction)) +
+  geom_point() +
+  scale_color_viridis_c() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
 ## Figure (number of s.s. SVG)
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific_v1.RDS")))
@@ -189,36 +239,73 @@ ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_num_svg.pdf
 ## Figure (visual inspection of top 25 s.s. SVGs for each cluster)
 ## load relevant analysis results
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific_v1.RDS")))
+
+## plot top n s.s. SVGs for each resolution and cluster
 alpha <- 0.05
-df <- df %>%
-  mutate(
-    resolution = factor(resolution, levels = c(50, 100, 200, 400)),
-    cluster = factor(cluster, levels = levels(ct_labels))
-  )
-df$svg_boolean <- df$padj <= alpha
-
-res <- 200
-df_sub <- df[df$resolution == res,]
-
-## load relevant rasterized data
-
-for (ct_label in unique(df_sub$cluster)) {
-  temp <- df_sub[df_sub$cluster == ct_label,]
+num_rank <- 25
+for (res in unique(df$resolution)) {
+  df_sub <- df[df$resolution == res,]
+  for (ct_label in unique(df_sub$cluster)) {
+    ## subset cluster of interest
+    spe_sub <- spe[,spe$cluster == ct_label]
+    
+    ## rasterization
+    spe_sub_rast <- SEraster::rasterizeGeneExpression(spe_sub, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+    
+    top_svgs <- df_sub %>%
+      filter(cluster == ct_label) %>%
+      arrange(rank) %>%
+      filter(rank <= num_rank, padj <= alpha)
   
-  num_rank <- 25
-  df_ranked <- temp[order(temp$rank, decreasing = FALSE),]
-  top_svgs <- df_ranked[1:num_rank,]$gene
-  df_plt <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], as.matrix(t(assay(spe_rast)[top_svgs,]))) %>%
-    pivot_longer(!c(x, y), names_to = "gene", values_to = "exp")
-  ggplot(df_plt, aes(x = x, y = y, fill = exp)) +
-    facet_wrap(~ gene) +
-    geom_tile() +
-    scale_fill_viridis_c(name = "gene expression") +
-    labs(title = paste0("Top ", num_rank, " SVGs based on nnSVG rank")) +
-    theme_bw()
-  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_nnsvg_global_top_", num_rank, "_svgs.pdf")), width = 8, heigh = 8, dpi = 300)
-  
+    df_plt <- data.frame(x = spatialCoords(spe_sub_rast)[,1], y = spatialCoords(spe_sub_rast)[,2], as.matrix(t(assay(spe_sub_rast, "pixelval")[top_svgs$gene,]))) %>%
+      pivot_longer(!c(x, y), names_to = "gene", values_to = "exp")
+    ggplot(df_plt, aes(x = x, y = y, fill = exp)) +
+      facet_wrap(~ gene) +
+      coord_fixed() +
+      geom_tile() +
+      scale_fill_viridis_c(name = "gene expression") +
+      labs(title = paste0("Cluster ", ct_label, ", top ", num_rank, " SVGs (padj <= ", alpha, ") based on nnSVG rank"),
+           x = "x (um)",
+           y = "y (um)") +
+      theme_bw()
+    ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_nnsvg_ct_specific_resolution_", res, "_cluster_", ct_label, "_top_", num_rank, "_svgs.pdf")), width = 8, heigh = 8, dpi = 300)
+  }
 }
+
+## Figure (global nnSVG vs. ct-specific nnSVG)
+## load nnSVG results
+df_nnsvg_global <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
+df_nnsvg_ct_specific <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific_v1.RDS")))
+
+## cluster 39 (kidney)
+ct_label <- 39
+genes <- c("Calb1", "Clcnka", "Cryab", "Ptn", "Scin", "Tfcp2l1")
+res <- 100
+
+## subset ct-specific nnSVG results
+df_nnsvg_ct_specific <- df_nnsvg_ct_specific[df_nnsvg_ct_specific$resolution == res & df_nnsvg_ct_specific$cluster == ct_label,]
+
+## subset cluster of interest
+spe_sub <- spe[,spe$cluster == ct_label]
+## rasterization
+spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+spe_sub_rast <- SEraster::rasterizeGeneExpression(spe_sub, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+
+## extract data
+df_global <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], as.matrix(t(assay(spe_rast, "pixelval")[genes,])))
+rank_global <- df_nnsvg_global[df_nnsvg_global$gene %in% genes,c("gene", "rank", "padj")]
+
+df_ct_specific <- data.frame(x = spatialCoords(spe_sub_rast)[,1], y = spatialCoords(spe_sub_rast)[,2], as.matrix(t(assay(spe_sub_rast, "pixelval")[genes,])))
+rank_ct_specific <- df_nnsvg_ct_specific[df_nnsvg_ct_specific$gene %in% genes,c("gene", "rank", "padj")]
+
+## plot
+df_global <- df_global %>%
+  pivot_longer(-c("x","y"), names_to = "gene", values_to = "exp") %>%
+  mutate(gene = factor(gene, levels = genes[order(rank_ct_specific$rank)]))
+
+ggplot(df_global, aes(x = x, y = y, col = Cryab)) +
+  geom_tile() +
+  theme_bw()
 
 # Further exploration -----------------------------------------------------
 

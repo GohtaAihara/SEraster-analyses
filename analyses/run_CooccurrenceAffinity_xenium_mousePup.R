@@ -16,10 +16,15 @@ library(ggplot2)
 library(gridExtra)
 library(here)
 library(CooccurrenceAffinity)
+library(tidyr)
+library(tibble)
+library(dplyr)
+library(reshape)
 
 par(mfrow=c(1,1))
 
 dataset_name = "xenium_mousePup"
+method = "CooccurrenceAffinity"
 
 # Load dataset ------------------------------------------------------------
 
@@ -195,14 +200,117 @@ ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_clusters_si
 res <- 100
 spe_rast <- readRDS(file = here("outputs", paste0(dataset_name, "_rasterized_resolution_", res, "_binarized.RDS")))
 
+## Figure (number of s.s. pair-wise celltype colocalization)
+res_list <- list(50, 100, 200, 400)
+alpha <- 0.05
+df_plt <- do.call(rbind, lapply(res_list, function(res) {
+  df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+  return(data.frame(resolution = res, num_localized_pairs = sum(df$pval <= alpha), prop_localized_pairs = sum(df$pval <= alpha)/length(unique(df$pair))))
+}))
+ggplot(df_plt, aes(x = resolution, y = num_localized_pairs)) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = unique(df_plt$resolution)) +
+  labs(title = paste0("Number of localized pairs (p value <= ", res, ")"),
+       x = "Resolution (um)",
+       y = "Number of localized pairs") +
+  theme_bw()
+
+ggplot(df_plt, aes(x = resolution, y = prop_localized_pairs)) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = unique(df_plt$resolution)) +
+  labs(title = paste0("Proportion of localized pairs (p value <= ", res, ")"),
+       x = "Resolution (um)",
+       y = "Proportion of localized pairs") +
+  theme_bw()
+
+
 ## Figure (CooccurrenceAffinity heatmap)
+res_list <- list(50, 100, 200, 400)
+for (res in res_list) {
+  df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+  ggplot(df, aes(x = celltypeA, y = celltypeB, fill = alpha)) +
+    geom_tile() +
+    scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red") +
+    labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res, ")"),
+         x = "Cluster A",
+         y = "Cluster B") +
+    theme_bw()
+  ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_without_clustering_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
+  
+  ## create symmetric data
+  df_flipped <- df[df$celltypeA != df$celltypeB,]
+  df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
+  df_sym <- rbind(df, df_flipped)
+  
+  ## use non-symmetric (non-redundant) data
+  ## reset label order
+  df_sym <- df_sym %>%
+    mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
+           celltypeB = factor(celltypeB, levels(ct_labels)))
+  ## reorganize into matrix
+  df_heatmap_non_sym <- cast(df, celltypeA ~ celltypeB, value = "alpha")
+  df_heatmap_non_sym <- df_heatmap_non_sym[,-1]
+  ## cluster
+  hc_non_sym <- hclust(dist(df_heatmap_non_sym))
+  ## reorder labels
+  df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_non_sym)[hc_non_sym$order])
+  df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_non_sym)[hc_non_sym$order])
+  ## plot
+  ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+    coord_fixed() +
+    geom_tile(linewidth = 0.5) +
+    scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red") +
+    scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
+    labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res, ")"),
+         x = "Cluster A",
+         y = "Cluster B") +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_nonsym_clustering_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
+  
+  ## use symmetric (redundant) data
+  ## reset label order
+  df_sym <- df_sym %>%
+    mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
+           celltypeB = factor(celltypeB, levels(ct_labels)))
+  ## reorganize into matrix
+  df_heatmap_sym <- cast(df_sym, celltypeA ~ celltypeB, value = "alpha")
+  df_heatmap_sym <- df_heatmap_sym[,-1]
+  isSymmetric.matrix(as.matrix(df_heatmap_sym))
+  ## cluster
+  hc_sym <- hclust(dist(df_heatmap_sym))
+  ## reorder labels
+  df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym$order])
+  df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym$order])
+  ## plot
+  ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+    coord_fixed() +
+    geom_tile(linewidth = 0.5) +
+    scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red") +
+    scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
+    labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res, ")"),
+         x = "Cluster A",
+         y = "Cluster B") +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_sym_clustering_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
+}
+
+## test visualization
 res <- 100
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
-ggplot(df, aes(x = celltypeA, y = celltypeB, fill = alpha)) +
-  geom_tile() +
+alpha <- 0.05
+ggplot(df, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+  geom_tile(linewidth = 0.5) +
   scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red") +
+  scale_color_manual(name = paste0("p value <= ", alpha), values = c("lightgrey", "black")) +
   labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res, ")"),
        x = "Cluster A",
        y = "Cluster B") +
   theme_bw()
+ggsave(filename = here("plots", dataset_name, method, "test.pdf"), width = 12, height = 10, dpi = 300)
 
+
+## Figure (visual inspection of spatial niches)
