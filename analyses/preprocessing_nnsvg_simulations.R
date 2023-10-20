@@ -45,6 +45,10 @@ for (i in sim_names) {
   ## add cell IDs
   colnames(spe) <- paste0("cell", seq(dim(spe)[2]))
   rownames(spatialCoords(spe)) <- paste0("cell", seq(dim(spe)[2]))
+  ## scale coordinates to 6,000 um by 6,000 um
+  spatialCoords(spe) <- spatialCoords(spe) * 6000
+  
+  plot(spatialCoords(spe), pch=".", main=i)
   
   saveRDS(spe, file = here(dir_output, paste0("spe_", i, ".RDS")))
 }

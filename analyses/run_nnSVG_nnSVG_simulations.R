@@ -50,8 +50,7 @@ sim_names <- c(
 # Run method -------------------------------------------------------------
 
 ## iterate over 1. dataset, 2. resolution, 3. rotation (save everything in one df for each dataset)
-res_list <- c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01)))
-# res_list <- list("singlecell", 0.09)
+res_list <- c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01)*6000))
 n_rotation <- 10
 angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
 
