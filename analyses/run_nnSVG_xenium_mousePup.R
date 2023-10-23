@@ -273,20 +273,55 @@ for (res in unique(df$resolution)) {
 }
 
 ## Figure (global nnSVG vs. ct-specific nnSVG)
-## load nnSVG results
-df_nnsvg_global <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
-df_nnsvg_ct_specific <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific_v1.RDS")))
-
 ## switch organ
 ## cluster 39 (kidney)
 ct_label <- 39
 genes <- c("Calb1", "Clcnka", "Cryab", "Ptn", "Scin", "Tfcp2l1")
+# Calb1 = kidney collecting duct epithelial cell
+# Clcnka = kidney loop of Henle ascending limb epithelial cell
+# Cryab = podocyte (sensu Diptera) (cells in bowman's capsule)
+# Ptn = transition zone lymphatic endothelial cell
+# Scin = kidney cortex artery cell
+# Tfcp2l1 = kidney collecting duct principal cell
 res <- 100
 
-## cluster n (n)
-ct_label <- n
-genes <- c("n", "Clcnka", "Cryab", "Ptn", "Scin", "Tfcp2l1")
+## cluster 23 (brain) ## not doing it because nnSVG failed at resolution = 100, and many SVGs are pancreas related
+ct_label <- 23
+# genes <- c("Hap1", "Lhx2", "Nap1l5", "Neurod1", "Nnat", "Pnmal2", "Scg2", "Scg5", "Vsnl1")
+## weird SVGs (Hap1 = pancreatic D cell, Lhx2 = keratinocyte stem cell, Nap1l5 = pancreatic A cell, Neurod1 = pancreatic A cell, Pnmal2 = pancreatic D cell, Scg2 = type B pancreatic cell, Scg5 = pancreatic PP cell, Vsnl1 = pericyte)
+res <- 200
+
+## cluster 11 (liver)
+ct_label <- 11
+genes <- c("Hrg", "Tat")
+# Hrg = hepatocytes
+# Pck1 = kidney proximal convoluted tubule epithelial cell
+# Rbp2 = enterocyte of epithelium of large intestine
+# Serpina3n = fibroblast of cardiac tissue
+# Tat = hepatocyte
+genes <- c("Hpx", "Gc", "Tat", "Slc10a1", "Abcb11", "Hrg") ## hepatocyte markers
 res <- 100
+
+## cluster 26 (intestines)
+ct_label <- 26
+# genes <- c("Apoc2", "Krt19", "Rbp2", "X2610528A11Rik")
+# Apoc2 = intermediate monocyte
+# Krt19 = club cell (usually found in lung)
+# Rbp2 = enterocyte of epithelium of large intestine
+# X2610528A11Rik = enterocyte of epithelium of large intestine
+genes <- c("Oit1", "Krt8", "Gpx2", "Cldn7", "Cdx1", "Cdhr5", "Hmgcs2", "B4galnt2", "Mgat4c")
+res <- 100
+
+## cluster 22 (skin)
+ct_label <- 22
+genes <- c("Krt16", "Cnfn", "S100a14", "Krt13", "Serpinb5", "Them5")
+res <- 100
+
+num_genes <- length(genes)
+
+## load nnSVG results
+df_nnsvg_global <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
+df_nnsvg_ct_specific <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific_v1.RDS")))
 
 ## subset ct-specific nnSVG results
 df_nnsvg_ct_specific <- df_nnsvg_ct_specific[df_nnsvg_ct_specific$resolution == res & df_nnsvg_ct_specific$cluster == ct_label,]
@@ -326,7 +361,7 @@ ggplot(df_global, aes(x = x, y = y, fill =　exp)) +
     axis.text = element_blank(),
     axis.ticks = element_blank(),
   )
-ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_nnsvg_global_resolution_", res, "_cluster_", ct_label, "_visualization.pdf")), width = 6, heigh = 6, dpi = 300)
+ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_nnsvg_global_resolution_", res, "_cluster_", ct_label, "_visualization.pdf")), width = 6, height = 6, dpi = 300)
 
 ## plot cluster-specific SVGs
 df_ct_specific <- df_ct_specific %>%

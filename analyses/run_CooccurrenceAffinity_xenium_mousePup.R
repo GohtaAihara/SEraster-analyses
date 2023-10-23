@@ -13,6 +13,7 @@ source("analyses/functions.R")
 library(SpatialExperiment)
 library(Matrix)
 library(ggplot2)
+library(ggrastr)
 library(gridExtra)
 library(here)
 library(CooccurrenceAffinity)
@@ -314,3 +315,46 @@ ggsave(filename = here("plots", dataset_name, method, "test.pdf"), width = 12, h
 
 
 ## Figure (visual inspection of spatial niches)
+niches <- list(
+  factor(c(6, 8, 12, 15, 20, 56), levels = levels(ct_labels)),
+  factor(c(10, 22, 46, 42, 49), levels = levels(ct_labels)),
+  factor(c(13, 30, 51, 54, 57, 64), levels = levels(ct_labels)),
+  factor(c(11, 25, 28, 31, 38, 45, 60), levels = levels(ct_labels)),
+  factor(c(24, 26, 33, 35, 36, 55), levels = levels(ct_labels)),
+  factor(c(39, 41, 47, 66), levels = levels(ct_labels)),
+  factor(c(29, 50, 58, 59), levels = levels(ct_labels)),
+  factor(c(9, 23), levels = levels(ct_labels))
+)
+
+## create R default color palette of length n
+# gg_color_hue <- function(n) {
+#   hues = seq(15, 375, length = n + 1)
+#   hcl(h = hues, l = 65, c = 100)[1:n]
+# }
+
+for (clusters in niches) {
+  ## subset by clusters
+  spe_sub <- spe[,spe$cluster %in% clusters]
+  
+  ## plot
+  df <- data.frame(spatialCoords(spe))
+  df_sub <- data.frame(x = spatialCoords(spe_sub)[,1], y = spatialCoords(spe_sub)[,2], cluster = colData(spe_sub)$cluster)
+  ggplot(df, aes(x = x, y = y)) +
+    coord_fixed() +
+    rasterise(geom_point(color = "lightgray", size = 0.1), dpi = 300) +
+    rasterise(geom_point(data = df_sub, aes(x = x, y = y, col = cluster), size = 0.1), dpi = 300) +
+    guides(col = guide_legend(override.aes = list(size = 3))) +
+    # scale_color_manual(name = "Clusters", values = gg_color_hue(67)) +
+    labs(title = paste0("Clusters = ", paste(clusters, collapse = ", ")),
+         x = "x (um)",
+         y = "y (um)",
+         col = "Clusters") +
+    theme_bw() +
+    theme(
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(filename = here("plots", dataset_name, method, paste0("singlecell_niche_clusters_", paste(clusters, collapse = "_"), ".pdf")), width = 4, height = 5, dpi = 300)
+}
