@@ -277,9 +277,15 @@ for (res in unique(df$resolution)) {
 df_nnsvg_global <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
 df_nnsvg_ct_specific <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific_v1.RDS")))
 
+## switch organ
 ## cluster 39 (kidney)
 ct_label <- 39
 genes <- c("Calb1", "Clcnka", "Cryab", "Ptn", "Scin", "Tfcp2l1")
+res <- 100
+
+## cluster n (n)
+ct_label <- n
+genes <- c("n", "Clcnka", "Cryab", "Ptn", "Scin", "Tfcp2l1")
 res <- 100
 
 ## subset ct-specific nnSVG results
@@ -294,18 +300,66 @@ spe_sub_rast <- SEraster::rasterizeGeneExpression(spe_sub, assay_name = "lognorm
 ## extract data
 df_global <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], as.matrix(t(assay(spe_rast, "pixelval")[genes,])))
 rank_global <- df_nnsvg_global[df_nnsvg_global$gene %in% genes,c("gene", "rank", "padj")]
+rank_global$method <- "global"
 
 df_ct_specific <- data.frame(x = spatialCoords(spe_sub_rast)[,1], y = spatialCoords(spe_sub_rast)[,2], as.matrix(t(assay(spe_sub_rast, "pixelval")[genes,])))
 rank_ct_specific <- df_nnsvg_ct_specific[df_nnsvg_ct_specific$gene %in% genes,c("gene", "rank", "padj")]
+rank_ct_specific$method <- "cluster specific"
 
-## plot
+## plot global SVGs
 df_global <- df_global %>%
   pivot_longer(-c("x","y"), names_to = "gene", values_to = "exp") %>%
   mutate(gene = factor(gene, levels = genes[order(rank_ct_specific$rank)]))
 
-ggplot(df_global, aes(x = x, y = y, col = Cryab)) +
+ggplot(df_global, aes(x = x, y = y, fill =　exp)) +
+  facet_wrap(~ gene) +
+  coord_fixed() +
   geom_tile() +
+  scale_fill_viridis_c(name = "Log-normalized\nexpression") +
+  labs(title = paste0("Global SVG (Resolution = ", res, ")"),
+       x = "x (um)",
+       y = "y (um)") +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_nnsvg_global_resolution_", res, "_cluster_", ct_label, "_visualization.pdf")), width = 6, heigh = 6, dpi = 300)
+
+## plot cluster-specific SVGs
+df_ct_specific <- df_ct_specific %>%
+  pivot_longer(-c("x","y"), names_to = "gene", values_to = "exp") %>%
+  mutate(gene = factor(gene, levels = genes[order(rank_ct_specific$rank)]))
+
+ggplot(df_ct_specific, aes(x = x, y = y, fill =　exp)) +
+  facet_wrap(~ gene) +
+  coord_fixed() +
+  geom_tile() +
+  scale_fill_viridis_c(name = "Log-normalized\nexpression") +
+  labs(title = paste0("Cluster-specific SVG (Resolution = ", res, ")"),
+       x = "x (um)",
+       y = "y (um)") +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_nnsvg_ct_specific_resolution_", res, "_cluster_", ct_label, "_visualization.pdf")), width = 6, heigh = 3, dpi = 300)
+
+## plot rank comparison
+df_rank <- rbind(rank_global, rank_ct_specific)
+
+ggplot(df_rank, aes(x = gene, y = rank, col = method, shape = method)) +
+  geom_point(size = 3) +
+  labs(title = paste0("Comparison of nnSVG rank (Resolution = ", res, ")"),
+       x = "Gene",
+       y = "Rank") +
   theme_bw()
+ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_nnsvg_global_ct_specific_comparison_resolution_", res, "_cluster_", ct_label, ".pdf")), width = 6, heigh = 3, dpi = 300)
 
 # Further exploration -----------------------------------------------------
 
