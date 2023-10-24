@@ -330,7 +330,7 @@ ggplot(df_perf_raw, aes(x = resolution, y = values, col = metrics)) +
        col = "Metric") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary_v2.pdf")), width = 8, heigh = 8, dpi = 300)
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary_v2.pdf")), width = 12, heigh = 10, dpi = 300)
 
 # Further exploration -----------------------------------------------------
 
