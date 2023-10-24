@@ -396,6 +396,110 @@ ggplot(df_rank, aes(x = gene, y = rank, col = method, shape = method)) +
   theme_bw()
 ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_nnsvg_global_ct_specific_comparison_resolution_", res, "_cluster_", ct_label, ".pdf")), width = 6, heigh = 3, dpi = 300)
 
+## Figure (global nnSVG vs. ct-specific nnSVG version 2)
+## more focused on shift for s.s. SVGs in global vs. ct-specific
+## load gene annotation
+gene_annot <- read.csv(file = "~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/Xenium_mousePup/Xenium_mMulti_v1_metadata_v2.csv")
+## switch organ
+## cluster 11 (liver)
+ct_label <- 11
+genes <- c() ## no liver genes that are not s.s. SVGs in cluster-specific nnSVG results
+res <- 100
+
+## cluster 39 (kidney)
+ct_label <- 39
+genes <- c("Pck1", "Sostdc1", "Asb9", "Ttc36", "Guca2b", "Slc22a6", "Sox17", "Tspan8", "Cyp4b1", "Slc5a1", "Cldn2", "Tmem147", "Dao", "Aif1l", "Ndufs8", "Slc22a8", "Slc4a4", "Aqp1", "Nox4", "Cndp2")
+res <- 100
+
+## cluster 26 (intestines)
+ct_label <- 26
+genes <- c() ## no intestinal genes that are not s.s. SVGs in cluster-specific nnSVG results
+res <- 100
+
+## cluster 22 (skin)
+ct_label <- 22
+genes <- c("Tnfaip6", "Cnn1", "Lce1m", "Ecrg4")
+res <- 100
+
+## load nnSVG results
+df_nnsvg_global <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
+df_nnsvg_ct_specific <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific_v1.RDS")))
+
+## subset ct-specific nnSVG results
+df_nnsvg_ct_specific <- df_nnsvg_ct_specific[df_nnsvg_ct_specific$resolution == res & df_nnsvg_ct_specific$cluster == ct_label,]
+
+## compare number of s.s. SVGs
+alpha <- 0.05
+sum(df_nnsvg_global$padj <= alpha)
+sum(df_nnsvg_ct_specific$padj <= alpha)
+svg_global <- df_nnsvg_global[df_nnsvg_global$padj <= alpha,]
+svg_ct_specific <- df_nnsvg_ct_specific[df_nnsvg_ct_specific$padj <= alpha,]
+nonsvg_ct_specific <- setdiff(svg_global$gene, svg_ct_specific$gene)
+genes %in% nonsvg_ct_specific
+gene_annot[gene_annot$Gene %in% nonsvg_ct_specific,]
+
+## see nnSVG results for selected genes
+View(df_nnsvg_ct_specific[df_nnsvg_ct_specific$gene %in% genes,])
+
+## subset cluster of interest
+spe_sub <- spe[,spe$cluster == ct_label]
+## rasterization
+spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+spe_sub_rast <- SEraster::rasterizeGeneExpression(spe_sub, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+
+## extract data
+df_global <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], as.matrix(t(assay(spe_rast, "pixelval")[genes,])))
+rank_global <- df_nnsvg_global[df_nnsvg_global$gene %in% genes,c("gene", "rank", "padj")]
+rank_global$method <- "global"
+
+df_ct_specific <- data.frame(x = spatialCoords(spe_sub_rast)[,1], y = spatialCoords(spe_sub_rast)[,2], as.matrix(t(assay(spe_sub_rast, "pixelval")[genes,])))
+rank_ct_specific <- df_nnsvg_ct_specific[df_nnsvg_ct_specific$gene %in% genes,c("gene", "rank", "padj")]
+rank_ct_specific$method <- "cluster specific"
+
+## plot global SVGs
+df_global <- df_global %>%
+  pivot_longer(-c("x","y"), names_to = "gene", values_to = "exp") %>%
+  mutate(gene = factor(gene, levels = genes[order(rank_ct_specific$rank)]))
+
+ggplot(df_global, aes(x = x, y = y, fill =　exp)) +
+  facet_wrap(~ gene) +
+  coord_fixed() +
+  geom_tile() +
+  scale_fill_viridis_c(name = "Log-normalized\nexpression") +
+  labs(title = paste0("Global SVG (Resolution = ", res, ")"),
+       x = "x (um)",
+       y = "y (um)") +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_nnsvg_global_resolution_", res, "_cluster_", ct_label, "_v2.pdf")), dpi = 300)
+
+## plot cluster-specific SVGs
+df_ct_specific <- df_ct_specific %>%
+  pivot_longer(-c("x","y"), names_to = "gene", values_to = "exp") %>%
+  mutate(gene = factor(gene, levels = genes[order(rank_ct_specific$rank)]))
+
+ggplot(df_ct_specific, aes(x = x, y = y, fill =　exp)) +
+  facet_wrap(~ gene) +
+  coord_fixed() +
+  geom_tile() +
+  scale_fill_viridis_c(name = "Log-normalized\nexpression") +
+  labs(title = paste0("Cluster-specific SVG (Resolution = ", res, ")"),
+       x = "x (um)",
+       y = "y (um)") +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_nnsvg_ct_specific_resolution_", res, "_cluster_", ct_label, "_v2.pdf")), dpi = 300)
+
 # Further exploration -----------------------------------------------------
 
 ## plot the number of cells in each cluster
