@@ -127,8 +127,49 @@ for (i in sim_names) {
 
 # Plot --------------------------------------------------------------------
 
+## Figure x (single cell)
+sim_names <- c(
+  "sim_largeBandwidth_fullExpr",
+  "sim_largeBandwidth_medExpr",
+  "sim_largeBandwidth_lowExpr",
+  "sim_medBandwidth_fullExpr",
+  "sim_medBandwidth_medExpr",
+  "sim_medBandwidth_lowExpr",
+  "sim_smallBandwidth_fullExpr",
+  "sim_smallBandwidth_medExpr",
+  "sim_smallBandwidth_lowExpr"
+)
+
+df <- do.call(rbind, lapply(sim_names, function(i) {
+  ## load dataset
+  spe <- readRDS(file = here(dir, paste0("spe_", i, ".RDS")))
+  svg_example <- which(rowData(spe)$expressed)[1]
+  
+  meta <- unlist(strsplit(gsub("^sim_(.*?)Bandwidth_(.*?)Expr$", "\\1 \\2", i), " "))
+  
+  return(data.frame(dataset = i, bandwidth = meta[1], expression = meta[2], x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = assay(spe)[svg_example,]))
+}))
+
+df <- df %>%
+  mutate(bandwidth = factor(bandwidth, levels = c("large", "med", "small")),
+         expression = factor(expression, levels = c("full", "med", "low")))
+
+ggplot(df, aes(x = x, y = y, col = gene)) +
+  facet_grid(bandwidth ~ expression) +
+  coord_fixed() +
+  geom_point(size = 0.7) +
+  scale_color_viridis_c(name = "Log-normalized\nexpression") +
+  labs(title = "Simulated dataset",
+       x = "x (um)",
+       y = "y (um)") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)
+  )
+ggsave(filename = here("plots", dataset_name, paste0("nnsvg_sim_singlecell.pdf")), width = 12, height = 10, dpi = 300)
+
 ## Figure x (single cell and rasterization visualizations)
-res_list <- c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01)))
+res_list <- c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01)*6000))
 
 for (i in sim_names) {
   ## load dataset
@@ -178,6 +219,8 @@ for (i in sim_names) {
 }
 
 ## Figure (performance comparison)
+res_list <- c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01)*6000))
+
 sim_names <- c(
   "sim_largeBandwidth_fullExpr",
   "sim_largeBandwidth_medExpr",
@@ -205,6 +248,7 @@ calculatePerformanceMetrics(results_sig)
 
 # set a threshold p value
 alpha <- 0.05
+n_rotation <- 10
 angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
 df_perf <- do.call(rbind, lapply(sim_names, function(i) {
   ## load original spe to get T/F labels
@@ -222,13 +266,18 @@ df_perf <- do.call(rbind, lapply(sim_names, function(i) {
     }))
     return(data.frame(resolution = res, out2))
   }))
-  return(data.frame(dataset = i, out))
+  
+  meta <- unlist(strsplit(gsub("^sim_(.*?)Bandwidth_(.*?)Expr$", "\\1 \\2", i), " "))
+  
+  return(data.frame(dataset = i, bandwidth = meta[1], expression = meta[2], out))
 }))
 
 df_perf_raw <- df_perf %>%
-  mutate(resolution = factor(resolution, levels = c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01))))) %>%
-  select(dataset, resolution, rotation_deg, TPR, specificity, PPV, F1, ACC) %>%
-  pivot_longer(!c(dataset, resolution, rotation_deg), names_to = "metrics", values_to = "values")
+  mutate(resolution = factor(resolution, levels = res_list),
+         bandwidth = factor(bandwidth, levels = c("large", "med", "small")),
+         expression = factor(expression, levels = c("full", "med", "low"))) %>%
+  select(dataset, bandwidth, expression, resolution, rotation_deg, TPR, specificity, PPV, F1, ACC) %>%
+  pivot_longer(!c(dataset, bandwidth, expression, resolution, rotation_deg), names_to = "metrics", values_to = "values")
 
 df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
   out <- do.call(rbind, lapply(unique(df_perf$dataset), function(dataset) {
@@ -236,16 +285,23 @@ df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(re
       temp <- df_perf[df_perf$dataset == dataset & df_perf$resolution == res, metric]
       return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
     }))
-    return(data.frame(dataset = dataset, resolution = factor(res, levels = c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01)))), out2))
+    
+    meta <- unlist(strsplit(gsub("^sim_(.*?)Bandwidth_(.*?)Expr$", "\\1 \\2", dataset), " "))
+    
+    return(data.frame(dataset = dataset, bandwidth = meta[1], expression = meta[2], resolution = factor(res, levels = res_list), out2))
   }))
 }))
+df_perf_summary <- df_perf_summary %>%
+  mutate(resolution = factor(resolution, levels = res_list),
+         bandwidth = factor(bandwidth, levels = c("large", "med", "small")),
+         expression = factor(expression, levels = c("full", "med", "low")))
 
 df_perf_summary2 <- df_perf_summary
 df_perf_summary2$resolution <- sub("singlecell", 0, df_perf_summary2$resolution)
 df_perf_summary2$resolution <- as.numeric(df_perf_summary2$resolution)
 
 ggplot(df_perf_raw, aes(x = resolution, y = values, col = metrics)) +
-  facet_wrap(~dataset) +
+  facet_grid(bandwidth ~ expression) +
   # geom_jitter(width = 10, alpha = 0.3) +
   # geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
   geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
@@ -261,7 +317,7 @@ ggplot(df_perf_raw, aes(x = resolution, y = values, col = metrics)) +
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary.pdf")), width = 8, heigh = 8, dpi = 300)
 
 ggplot(df_perf_raw, aes(x = resolution, y = values, col = metrics)) +
-  facet_wrap(~dataset) +
+  facet_grid(bandwidth ~ expression) +
   # geom_jitter(width = 10, alpha = 0.3) +
   geom_line(data = df_perf_summary2, aes(x = resolution, y = mean, col = metrics)) +
   geom_point(data = df_perf_summary2, aes(x = resolution, y = mean, col = metrics), size = 1) +
