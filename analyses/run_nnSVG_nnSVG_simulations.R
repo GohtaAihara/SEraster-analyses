@@ -27,6 +27,7 @@ dataset_name <- "nnSVG_simulations"
 
 # Load dataset ------------------------------------------------------------
 
+## simulations for various bandwidth and expression
 ## filenames for saved simulation datasets
 sim_names <- c(
   "sim_largeBandwidth_fullExpr",
@@ -45,10 +46,27 @@ sim_names <- c(
 #   "sim_largeBandwidth_medExpr"
 # )
 
+## simulations for shuffle based on medium bandwidth, medium expression
+## filenames for saved simulation datasets
+sim_names_shuffle <- c(
+  "sim_shuffle00", 
+  "sim_shuffle01", 
+  "sim_shuffle02", 
+  "sim_shuffle03", 
+  "sim_shuffle04", 
+  "sim_shuffle05", 
+  "sim_shuffle06", 
+  "sim_shuffle07", 
+  "sim_shuffle08", 
+  "sim_shuffle09", 
+  "sim_shuffle10"
+)
+
 ## load each dataset when we analyze
 
 # Run method -------------------------------------------------------------
 
+## simulations for various bandwidth and expression
 ## iterate over 1. dataset, 2. resolution, 3. rotation (save everything in one df for each dataset)
 res_list <- c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01)*6000))
 n_rotation <- 10
@@ -125,9 +143,86 @@ for (i in sim_names) {
 }
 
 
+## simulations for shuffle based on medium bandwidth, medium expression
+## iterate over 1. dataset, 2. resolution, 3. rotation (save everything in one df for each dataset)
+res_list <- c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01)*6000))
+n_rotation <- 10
+angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
+
+for (i in sim_names_shuffle) {
+  print(paste0("Dataset: ", i))
+  
+  ## load dataset,
+  spe <- readRDS(file = here(dir, paste0("spe_", i, ".RDS")))
+  
+  ## iterate over resolutions
+  nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
+    print(paste0("Resolution: ", res))
+    if (res == "singlecell") {
+      ## iterate over rotations (single cell)
+      df <- do.call(rbind, lapply(angle_deg_list, function(deg) {
+        print(paste0("Rotation (degrees): ", deg))
+        ## rotate xy coordinates
+        spe_rotated <- SpatialExperiment::SpatialExperiment(
+          assays = assays(spe),
+          spatialCoords = rotateAroundCenter(spatialCoords(spe), deg)
+        )
+        
+        ## nnSVG
+        spe_rotated_nnsvg <- try({nnSVG::nnSVG(
+          spe_rotated,
+          assay_name = "logcounts",
+          BPPARAM = BiocParallel::MulticoreParam()
+        )})
+        
+        if (class(spe_rotated_nnsvg) == "try-error") {
+          ## do not save anything for dataset/resolution/rotation that caused error in nnSVG
+          return(NULL)
+        } else {
+          temp <- rownames_to_column(as.data.frame(rowData(spe_rotated_nnsvg)), var = "gene")
+          temp <- cbind(rotation_deg = deg, num_pixels = dim(spe_rotated)[2], temp)
+          return(temp)
+        }
+      }))
+    } else {
+      ## iterate over rotations (rasterization)
+      df <- do.call(rbind, lapply(angle_deg_list, function(deg) {
+        print(paste0("Rotation (degrees): ", deg))
+        ## rotate xy coordinates
+        spe_rotated <- SpatialExperiment::SpatialExperiment(
+          assays = assays(spe),
+          spatialCoords = rotateAroundCenter(spatialCoords(spe), deg)
+        )
+        
+        ## rasterization
+        spe_rast <- SEraster::rasterizeGeneExpression(spe_rotated, assay_name = "logcounts", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+        
+        ## nnSVG
+        spe_rast_nnsvg <- try({nnSVG::nnSVG(
+          spe_rast,
+          assay_name = "pixelval",
+          BPPARAM = BiocParallel::MulticoreParam()
+        )})
+        
+        if (class(spe_rast_nnsvg) == "try-error") {
+          ## do not save anything for dataset/resolution/rotation that caused error in nnSVG
+          return(NULL)
+        } else {
+          temp <- rownames_to_column(as.data.frame(rowData(spe_rast_nnsvg)), var = "gene")
+          temp <- cbind(rotation_deg = deg, num_pixels = dim(spe_rast)[2], temp)
+          return(temp)
+        }
+      }))
+    }
+    return(data.frame(dataset = i, resolution = res, df))
+  }))
+  saveRDS(nnsvg_results, file = here("outputs", dataset_name, paste0(i, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+}
+
 # Plot --------------------------------------------------------------------
 
 ## Figure x (single cell)
+## simulations for various bandwidth and expression
 sim_names <- c(
   "sim_largeBandwidth_fullExpr",
   "sim_largeBandwidth_medExpr",
@@ -156,6 +251,49 @@ df <- df %>%
 
 ggplot(df, aes(x = x, y = y, col = gene)) +
   facet_grid(bandwidth ~ expression) +
+  coord_fixed() +
+  geom_point(size = 0.7) +
+  scale_color_viridis_c(name = "Log-normalized\nexpression") +
+  labs(title = "Simulated dataset",
+       x = "x (um)",
+       y = "y (um)") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)
+  )
+ggsave(filename = here("plots", dataset_name, paste0("nnsvg_sim_singlecell.pdf")), width = 12, height = 10, dpi = 300)
+
+## simulations for shuffle based on medium bandwidth, medium expression
+sim_names_shuffle <- c(
+  "sim_shuffle00", 
+  "sim_shuffle01", 
+  "sim_shuffle02", 
+  "sim_shuffle03", 
+  "sim_shuffle04", 
+  "sim_shuffle05", 
+  "sim_shuffle06", 
+  "sim_shuffle07", 
+  "sim_shuffle08", 
+  "sim_shuffle09", 
+  "sim_shuffle10"
+)
+
+df <- do.call(rbind, lapply(sim_names_shuffle, function(i) {
+  ## load dataset
+  spe <- readRDS(file = here(dir, paste0("spe_", i, ".RDS")))
+  svg_example <- which(rowData(spe)$expressed)[1]
+  
+  meta <- as.numeric(gsub("[^0-9]", "", i))
+  
+  return(data.frame(dataset = i, shuffle = paste0(meta*10, "% shuffled"), x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = assay(spe)[svg_example,]))
+}))
+
+# df <- df %>%
+#   mutate(bandwidth = factor(bandwidth, levels = c("large", "med", "small")),
+#          expression = factor(expression, levels = c("full", "med", "low")))
+
+ggplot(df, aes(x = x, y = y, col = gene)) +
+  facet_wrap(~shuffle) +
   coord_fixed() +
   geom_point(size = 0.7) +
   scale_color_viridis_c(name = "Log-normalized\nexpression") +
