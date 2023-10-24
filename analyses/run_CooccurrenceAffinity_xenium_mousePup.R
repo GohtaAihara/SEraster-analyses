@@ -200,6 +200,92 @@ ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_clusters_si
 ## Figure (rasterized spatial visualization)
 res <- 100
 spe_rast <- readRDS(file = here("outputs", paste0(dataset_name, "_rasterized_resolution_", res, "_binarized.RDS")))
+ct_label <- 1
+
+df <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], pixelval = assay(spe_rast, "pixelval")[ct_label,], re = assay(spe_rast, "re")[ct_label,], bin = factor(assay(spe_rast, "bin")[ct_label,], levels = c(0,1)))
+
+p1 <- ggplot(df, aes(x = x, y = y, fill = pixelval)) +
+  coord_fixed() +
+  geom_tile() +
+  scale_fill_viridis_c(name = "cells/pixel") +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank()
+  )
+p2 <- ggplot(df, aes(x = x, y = y, fill = re)) +
+  coord_fixed() +
+  geom_tile() +
+  scale_fill_viridis_c(name = "RE") +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank()
+  )
+p3 <- ggplot(df, aes(x = x, y = y, fill = bin)) +
+  coord_fixed() +
+  geom_tile() +
+  scale_fill_viridis_d(name = "Binarized") +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank()
+  )
+plt_comb <- grid.arrange(p1, p2, p3, ncol = 3, top = paste0("Cluster ", ct_label))
+ggsave(plt_comb, filename = here("plots", dataset_name, paste0(dataset_name, "_rasterized_data.pdf")), width = 8, height = 3, dpi = 300)
+
+ ## Figure (alpha MLE vs. -log10(p value))
+res <- 100
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+cluster <- 26
+## subset by cluster
+df_sub <- df[(df$celltypeA == cluster | df$celltypeB == cluster) & (df$celltypeA != df$celltypeB),]
+## subset by alpha MLE and pval
+alpha_mle <- 0
+pval <- 0.05
+df_sub <- df_sub[df_sub$alpha >= alpha_mle & df_sub$pval <= pval,]
+
+## plot alpha MLE vs. -log10(p value)
+ggplot(df_sub, aes(x = alpha, y = -log10(pval), col = pair)) +
+  geom_point() +
+  geom_errorbar(xmin = df_sub$ci.min, xmax = df_sub$ci.max) +
+  theme_bw()
+
+## plot single-cell
+for (i in seq(dim(df_sub)[1])) {
+  pair <- factor(unlist(strsplit(df_sub[i,"pair"], " & ")), levels = levels(ct_labels))
+  ## subset by clusters
+  spe_sub <- spe[,spe$cluster %in% pair]
+  
+  ## plot
+  df_plt <- data.frame(spatialCoords(spe))
+  df_plt_sub <- data.frame(x = spatialCoords(spe_sub)[,1], y = spatialCoords(spe_sub)[,2], cluster = colData(spe_sub)$cluster)
+  ggplot(df_plt, aes(x = x, y = y)) +
+    coord_fixed() +
+    rasterise(geom_point(color = "lightgray", size = 0.1), dpi = 300) +
+    rasterise(geom_point(data = df_plt_sub, aes(x = x, y = y, col = cluster), size = 0.1), dpi = 300) +
+    guides(col = guide_legend(override.aes = list(size = 3))) +
+    # scale_color_manual(name = "Clusters", values = gg_color_hue(67)) +
+    labs(title = paste0("Alpha MLE = ", sprintf("%.2f", df_sub[i,"alpha"]), ", p value = ", sprintf("%.2f", df_sub[i,"pval"])),
+         x = "x (um)",
+         y = "y (um)",
+         col = "Clusters") +
+    theme_bw() +
+    theme(
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(filename = here("plots", dataset_name, method, paste0("singlecell_pairs_", paste(pair, collapse = "_"), ".pdf")), width = 4, height = 5, dpi = 300)
+}
+
 
 ## Figure (number of s.s. pair-wise celltype colocalization)
 res_list <- list(50, 100, 200, 400)
