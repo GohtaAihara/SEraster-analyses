@@ -236,7 +236,10 @@ test <- bench::mark(
 
 # Plot --------------------------------------------------------------------
 
-## Figure 1a (spatial plots)
+## Figure 1 (schematics)
+
+
+## Figure 2a (spatial plots)
 # res <- list("singlecell", 50, 100, 200, 400)
 res_list <- list(200, 400)
 
@@ -286,12 +289,7 @@ for (res in res_list) {
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
 df$resolution <- factor(df$resolution, levels = c("singlecell", "50", "100", "200", "400"))
 
-gg_color_hue <- function(n) {
-  hues = seq(15, 375, length = n + 1)
-  hcl(h = hues, l = 65, c = 100)[1:n]
-}
-
-col_res <- c("gray40", gg_color_hue(4))
+col_res <- c("#666666", gg_color_hue(4))
 
 # total runtime
 ggplot(df, aes(x = num_points, y = as.numeric(runtime_total), col = resolution)) +

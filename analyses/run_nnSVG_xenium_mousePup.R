@@ -116,6 +116,117 @@ saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_ct_sp
 
 # Plot --------------------------------------------------------------------
 
+## load gene annotation
+gene_annot <- read.csv(file = "~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/Xenium_mousePup/Xenium_mMulti_v1_metadata_v2.csv")
+
+## Figure 3B (global vs. cluster-specific SVG)
+## cluster 39 (kidney)
+ct_label <- 39
+svgs_both <- c("Cryab", "Clcnka","Calb1")
+svgs_global_only <- c("Sostdc1", "Aif1l", "Ndufs8")
+gene_annot[gene_annot$Gene %in% c(svgs_both, svgs_global_only),]
+res <- 100
+
+## load nnSVG results
+df_nnsvg_global <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_v1.RDS")))
+df_nnsvg_ct_specific <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific_v1.RDS")))
+
+## subset ct-specific nnSVG results
+df_nnsvg_ct_specific <- df_nnsvg_ct_specific[df_nnsvg_ct_specific$resolution == res & df_nnsvg_ct_specific$cluster == ct_label,]
+
+## subset cluster of interest
+spe_sub <- spe[,spe$cluster == ct_label]
+## rasterization
+spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+spe_sub_rast <- SEraster::rasterizeGeneExpression(spe_sub, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+
+for (gene in c(svgs_both, svgs_global_only)) {
+  ## global
+  df_global <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], gene = assay(spe_rast, "pixelval")[gene,])
+  ggplot(df_global, aes(x = x, y = y, fill =　gene)) +
+    coord_fixed() +
+    geom_tile() +
+    scale_fill_viridis_c(name = "Log-normalized\nexpression") +
+    labs(title = paste0(gene, " (Resolution = ", res, ")"),
+         x = "x (um)",
+         y = "y (um)") +
+    theme_bw() +
+    theme(
+      legend.position = "none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      plot.margin=grid::unit(c(0,0,0,0), "mm")
+    )
+  ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_global_vs_ct-specific_svg_global_resolution_", res, "_", gene, ".pdf")), width = 3, height = 5, dpi = 300)
+  
+  ## cluster-specific
+  ## global
+  df_ct_specific <- data.frame(x = spatialCoords(spe_sub_rast)[,1], y = spatialCoords(spe_sub_rast)[,2], gene = assay(spe_sub_rast, "pixelval")[gene,])
+  ggplot(df_ct_specific, aes(x = x, y = y, fill =　gene)) +
+    coord_fixed() +
+    geom_tile() +
+    scale_fill_viridis_c(name = "Log-normalized\nexpression") +
+    labs(title = paste0(gene, " (Resolution = ", res, ")"),
+         x = "x (um)",
+         y = "y (um)") +
+    theme_bw() +
+    theme(
+      legend.position = "none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      plot.margin=grid::unit(c(0,0,0,0), "mm")
+    )
+  ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_global_vs_ct-specific_svg_cluster_", ct_label, "_resolution_", res, "_", gene, ".pdf")), width = 3, height = 2, dpi = 300)
+}
+
+## plot global SVGs
+df_plt <- df_comb %>%
+  pivot_longer(-c("method","x","y"), names_to = "gene", values_to = "exp")
+
+ggplot(df_plt, aes(x = x, y = y, fill =　exp)) +
+  facet_grid(method~gene, scales = "free_x") +
+  # coord_fixed() +
+  geom_tile() +
+  scale_fill_viridis_c(name = "Log-normalized\nexpression") +
+  labs(title = paste0("Global SVG (Resolution = ", res, ")"),
+       x = "x (um)",
+       y = "y (um)") +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+# ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_global_vs_ct-specific_svg_global_resolution_", res, ".pdf")), dpi = 300)
+
+## plot cluster-specific SVGs
+df_ct_specific <- df_ct_specific %>%
+  pivot_longer(-c("x","y"), names_to = "gene", values_to = "exp") %>%
+  mutate(gene = factor(gene, levels = genes[order(rank_ct_specific$rank)]))
+
+ggplot(df_ct_specific, aes(x = x, y = y, fill =　exp)) +
+  facet_wrap(~ gene) +
+  coord_fixed() +
+  geom_tile() +
+  scale_fill_viridis_c(name = "Log-normalized\nexpression") +
+  labs(title = paste0("Cluster-specific SVG (Resolution = ", res, ")"),
+       x = "x (um)",
+       y = "y (um)") +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_global_vs_ct-specific_svg_cluster_", ct_label, "_resolution_", res, ".pdf")), dpi = 300)
+
+
 ## Figure (visual inspection of top SVGs (based on rank from nnSVG))
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
 

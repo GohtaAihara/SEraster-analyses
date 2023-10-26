@@ -179,11 +179,14 @@ for (res in res_list) {
 
 # Plot --------------------------------------------------------------------
 
+col_clu <- gg_color_hue(length(levels(ct_labels)))
+
 ## Figure (single cell spatial visualization)
 df <- data.frame(spatialCoords(spe), colData(spe))
 ggplot(df, aes(x = x, y = y, col = cluster)) +
   coord_fixed() +
-  geom_point(size = 0.1) +
+  rasterize(geom_point(size = 0.01), dpi = 300) +
+  scale_color_manual(values = col_clu) +
   labs(title = "Single cell",
        col = "Cluster") +
   guides(col = guide_legend(override.aes = list(size = 3))) +
@@ -195,7 +198,7 @@ ggplot(df, aes(x = x, y = y, col = cluster)) +
     axis.ticks = element_blank(),
   )
 ## save plot
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_clusters_singlecell.pdf")))
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_clusters_singlecell.pdf")), width = 6, height = 7, dpi = 300)
 
 ## Figure (rasterized spatial visualization)
 res <- 100
@@ -412,12 +415,6 @@ niches <- list(
   factor(c(9, 23), levels = levels(ct_labels))
 )
 
-## create R default color palette of length n
-# gg_color_hue <- function(n) {
-#   hues = seq(15, 375, length = n + 1)
-#   hcl(h = hues, l = 65, c = 100)[1:n]
-# }
-
 for (clusters in niches) {
   ## subset by clusters
   spe_sub <- spe[,spe$cluster %in% clusters]
@@ -427,14 +424,15 @@ for (clusters in niches) {
   df_sub <- data.frame(x = spatialCoords(spe_sub)[,1], y = spatialCoords(spe_sub)[,2], cluster = colData(spe_sub)$cluster)
   ggplot(df, aes(x = x, y = y)) +
     coord_fixed() +
-    rasterise(geom_point(color = "lightgray", size = 0.1), dpi = 300) +
-    rasterise(geom_point(data = df_sub, aes(x = x, y = y, col = cluster), size = 0.1), dpi = 300) +
+    rasterise(geom_point(color = "lightgray", size = 0.01), dpi = 300) +
+    rasterise(geom_point(data = df_sub, aes(x = x, y = y, col = cluster), size = 0.01), dpi = 300) +
+    scale_color_manual(values = col_clu[clusters]) +
     guides(col = guide_legend(override.aes = list(size = 3))) +
     # scale_color_manual(name = "Clusters", values = gg_color_hue(67)) +
     labs(title = paste0("Clusters = ", paste(clusters, collapse = ", ")),
          x = "x (um)",
          y = "y (um)",
-         col = "Clusters") +
+         col = "Cluster") +
     theme_bw() +
     theme(
       panel.grid = element_blank(),
