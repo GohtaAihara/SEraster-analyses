@@ -286,11 +286,19 @@ for (res in res_list) {
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
 df$resolution <- factor(df$resolution, levels = c("singlecell", "50", "100", "200", "400"))
 
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+col_res <- c("gray40", gg_color_hue(4))
+
 # total runtime
 ggplot(df, aes(x = num_points, y = as.numeric(runtime_total), col = resolution)) +
   geom_boxplot(width = 6000, lwd = 0.75, outlier.shape = NA) +
   geom_jitter(width = 1000, size = 1, alpha = 0.75) +
   scale_x_continuous(breaks = unique(df$num_points)) + 
+  scale_color_manual(values = col_res) +
   labs(title = "Total runtime",
        x = "Number of spatial points",
        y = "Runtime (secs)",
@@ -304,6 +312,7 @@ ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_tot
 ggplot(df, aes(x = resolution, y = as.numeric(runtime_total), col = resolution)) +
   geom_boxplot(lwd = 0.75, outlier.shape = NA) +
   geom_jitter(width = 0.1, alpha = 0.75) +
+  scale_color_manual(values = col_res) +
   labs(title = "Total runtime",
        x = "Resolution",
        y = "Runtime (secs)",
@@ -319,6 +328,7 @@ ggplot(df, aes(x = num_points, y = as.numeric(runtime_nnsvg), col = resolution))
   geom_boxplot(width = 6000, lwd = 0.75, outlier.shape = NA) +
   geom_jitter(width = 1000, size = 1, alpha = 0.75) +
   scale_x_continuous(breaks = unique(df$num_points)) + 
+  scale_color_manual(values = col_res) +
   labs(title = "nnSVG runtime",
        x = "Number of spatial points",
        y = "Runtime (secs)",
@@ -332,6 +342,7 @@ ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_nns
 ggplot(df, aes(x = resolution, y = as.numeric(runtime_nnsvg), col = resolution)) +
   geom_boxplot(lwd = 0.75, outlier.shape = NA) +
   geom_jitter(width = 0.1, alpha = 0.75) +
+  scale_color_manual(values = col_res) +
   labs(title = "nnSVG runtime",
        x = "Resolution",
        y = "Runtime (secs)",
@@ -347,6 +358,7 @@ ggplot(df[df$resolution != "singlecell",], aes(x = num_points, y = as.numeric(ru
   geom_boxplot(width = 2000, lwd = 0.75, outlier.shape = NA) +
   geom_jitter(width = 500, size = 1, alpha = 0.75) +
   scale_x_continuous(breaks = unique(df$num_points)) + 
+  scale_color_manual(values = col_res) +
   labs(title = "SEraster runtime",
        x = "Number of spatial points",
        y = "Runtime (secs)",
@@ -360,6 +372,7 @@ ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_ras
 ggplot(df[df$resolution != "singlecell",], aes(x = resolution, y = as.numeric(runtime_rast), col = resolution)) +
   geom_boxplot(lwd = 0.75, outlier.shape = NA) +
   geom_jitter(width = 0.1, alpha = 0.75) +
+  scale_color_manual(values = col_res) +
   labs(title = "SEraster runtime",
        x = "Resolution",
        y = "Runtime (secs)",
