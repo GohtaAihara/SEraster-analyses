@@ -44,6 +44,9 @@ plot(pos, pch=".")
 ## density of feature x observation matrix
 calculateDensity(gexp)
 
+## load another metadata
+meta2 <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/MERFISH_cortex_For_Daniel/s1r1_metadata.csv.gz', row.names = 1)
+
 # Preprocessing -----------------------------------------------------------
 
 ## filter genes

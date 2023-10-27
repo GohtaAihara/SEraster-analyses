@@ -11,7 +11,9 @@ source("analyses/functions.R")
 
 library(SpatialExperiment)
 library(Matrix)
+library(sf)
 library(ggplot2)
+library(ggrastr)
 library(nnSVG)
 library(here)
 library(tidyr)
@@ -237,7 +239,61 @@ test <- bench::mark(
 # Plot --------------------------------------------------------------------
 
 ## Figure 1 (schematics)
+selected_genes <- c("Baiap2", "Slc17a6", "Gpr151")
+resolution <- 100
+spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "counts", resolution = resolution, fun = "sum", BPPARAM = BiocParallel::MulticoreParam())
 
+## create bbox
+pos <- spatialCoords(spe)
+bbox <- sf::st_bbox(c(
+  xmin = floor(min(pos[,1])-resolution/2), 
+  xmax = ceiling(max(pos[,1])+resolution/2), 
+  ymin = floor(min(pos[,2])-resolution/2), 
+  ymax = ceiling(max(pos[,2])+resolution/2)
+))
+
+## create grid for rasterization
+grid <- sf::st_make_grid(bbox, cellsize = resolution)
+grid_coord <- st_coordinates(grid)
+
+for (gene in selected_genes) {
+  ## plot single cell
+  ## plot single cell
+  df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = assay(spe, "counts")[gene,])
+  ggplot(df, aes(x = x, y = y, col = gene)) +
+    coord_fixed() +
+    geom_point(size = 0.1) +
+    scale_color_viridis_c() +
+    geom_hline(yintercept = grid_coord[,2], linetype = "solid", color = "gray") +
+    geom_vline(xintercept = grid_coord[,1], linetype = "solid",color = "gray") +
+    labs(title = "Single cell") +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_sc_global_gene_", gene, ".pdf")))
+  
+  ## plot rasterized
+  df <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], gene = assay(spe_rast, "pixelval")[gene,])
+  ggplot(df, aes(x = x, y = y, fill = gene)) +
+    coord_fixed() +
+    geom_tile(color = "gray") +
+    scale_fill_viridis_c() +
+    labs(title = "Rasterized") +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_global_gene_", gene, ".pdf")))
+}
 
 ## Figure 2a (spatial plots)
 # res <- list("singlecell", 50, 100, 200, 400)
