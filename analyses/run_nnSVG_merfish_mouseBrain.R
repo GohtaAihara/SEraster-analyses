@@ -256,17 +256,31 @@ bbox <- sf::st_bbox(c(
 grid <- sf::st_make_grid(bbox, cellsize = resolution)
 grid_coord <- st_coordinates(grid)
 
+df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], transcripts = colSums(assay(spe, "counts")))
+plt <- ggplot(df, aes(x = x, y = y, col = transcripts)) +
+  coord_fixed() +
+  rasterise(geom_point(size = 0.01)) +
+  scale_color_viridis_c() +
+  theme_bw() +
+  theme(
+    legend.position="none",
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_sc_global_tot_counts.pdf")))
+
 for (gene in selected_genes) {
   ## plot single cell
   ## plot single cell
   df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = assay(spe, "counts")[gene,])
   ggplot(df, aes(x = x, y = y, col = gene)) +
     coord_fixed() +
-    geom_point(size = 0.1) +
+    rasterise(geom_point(size = 0.01), dpi = 300) +
     scale_color_viridis_c() +
     geom_hline(yintercept = grid_coord[,2], linetype = "solid", color = "gray") +
     geom_vline(xintercept = grid_coord[,1], linetype = "solid",color = "gray") +
-    labs(title = "Single cell") +
     theme_bw() +
     theme(
       legend.position="none",
@@ -283,7 +297,6 @@ for (gene in selected_genes) {
     coord_fixed() +
     geom_tile(color = "gray") +
     scale_fill_viridis_c() +
-    labs(title = "Rasterized") +
     theme_bw() +
     theme(
       legend.position="none",
@@ -293,6 +306,30 @@ for (gene in selected_genes) {
       axis.ticks = element_blank(),
     )
   ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_global_gene_", gene, ".pdf")))
+}
+
+res_list <- list(50, 100, 200, 400)
+
+for (res in res_list) {
+  ## rasterize
+  spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "counts", resolution = res, fun = "sum", BPPARAM = BiocParallel::MulticoreParam())
+  
+  ## plot
+  df <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], transcripts = colSums(assay(spe_rast)))
+  plt <- ggplot(df, aes(x = x, y = y, fill = transcripts)) +
+    coord_fixed() +
+    geom_tile() +
+    scale_fill_viridis_c() +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ## save plot
+  ggsave(plot = plt, filename = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_resolution_", res, ".pdf")))
 }
 
 ## Figure 2a (spatial plots)
