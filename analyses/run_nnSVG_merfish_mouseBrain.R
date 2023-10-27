@@ -238,10 +238,15 @@ test <- bench::mark(
 
 # Plot --------------------------------------------------------------------
 
+col_celltype <- gg_color_hue(length(levels(colData(spe)$celltype)))
+names(col_celltype) <- levels(colData(spe)$celltype)
+
 ## Figure 1 (schematics)
 selected_genes <- c("Baiap2", "Slc17a6", "Gpr151")
+selected_celltypes <- c("Excitatory Neurons", "Inhibitory interneurons", "Oligodendrocytes")
 resolution <- 100
-spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "counts", resolution = resolution, fun = "sum", BPPARAM = BiocParallel::MulticoreParam())
+spe_rast_gexp <- SEraster::rasterizeGeneExpression(spe, assay_name = "counts", resolution = resolution, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+spe_rast_ct <- SEraster::rasterizeCellType(spe, col_name = "celltype", resolution = resolution, fun = "sum", BPPARAM = BiocParallel::MulticoreParam())
 
 ## create bbox
 pos <- spatialCoords(spe)
@@ -256,10 +261,11 @@ bbox <- sf::st_bbox(c(
 grid <- sf::st_make_grid(bbox, cellsize = resolution)
 grid_coord <- st_coordinates(grid)
 
-df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], transcripts = colSums(assay(spe, "counts")))
-plt <- ggplot(df, aes(x = x, y = y, col = transcripts)) +
+## single cell total transcripts
+df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], transcripts = colSums(assay(spe, "counts")), celltype = colData(spe)$celltype)
+ggplot(df, aes(x = x, y = y, col = transcripts)) +
   coord_fixed() +
-  rasterise(geom_point(size = 0.01)) +
+  rasterise(geom_point(size = 1, stroke = 0), dpi = 300) +
   scale_color_viridis_c() +
   theme_bw() +
   theme(
@@ -271,13 +277,44 @@ plt <- ggplot(df, aes(x = x, y = y, col = transcripts)) +
   )
 ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_sc_global_tot_counts.pdf")))
 
+## single cell celltypes
+ggplot(df, aes(x = x, y = y, col = celltype)) +
+  coord_fixed() +
+  rasterise(geom_point(size = 1, stroke = 0), dpi = 300) +
+  scale_color_manual(name = "Cell type", values = col_celltype) +
+  guides(col = guide_legend(override.aes = list(size = 3))) +
+  theme_bw() +
+  theme(
+    legend.position="right",
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_sc_global_celltype_with_legends.pdf")))
+
+ggplot(df, aes(x = x, y = y, col = celltype)) +
+  coord_fixed() +
+  rasterise(geom_point(size = 1, stroke = 0), dpi = 300) +
+  scale_color_manual(name = "Cell type", values = col_celltype) +
+  guides(col = guide_legend(override.aes = list(size = 3))) +
+  theme_bw() +
+  theme(
+    legend.position="none",
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_sc_global_celltype_without_legends.pdf")))
+
+## global gene expression
 for (gene in selected_genes) {
-  ## plot single cell
   ## plot single cell
   df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = assay(spe, "counts")[gene,])
   ggplot(df, aes(x = x, y = y, col = gene)) +
     coord_fixed() +
-    rasterise(geom_point(size = 0.01), dpi = 300) +
+    rasterise(geom_point(size = 1, stroke = 0), dpi = 300) +
     scale_color_viridis_c() +
     geom_hline(yintercept = grid_coord[,2], linetype = "solid", color = "gray") +
     geom_vline(xintercept = grid_coord[,1], linetype = "solid",color = "gray") +
@@ -292,7 +329,7 @@ for (gene in selected_genes) {
   ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_sc_global_gene_", gene, ".pdf")))
   
   ## plot rasterized
-  df <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], gene = assay(spe_rast, "pixelval")[gene,])
+  df <- data.frame(x = spatialCoords(spe_rast_gexp)[,1], y = spatialCoords(spe_rast_gexp)[,2], gene = assay(spe_rast_gexp, "pixelval")[gene,])
   ggplot(df, aes(x = x, y = y, fill = gene)) +
     coord_fixed() +
     geom_tile(color = "gray") +
@@ -308,6 +345,100 @@ for (gene in selected_genes) {
   ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_global_gene_", gene, ".pdf")))
 }
 
+## cell type-specific gene expression
+## subset by cell type
+ct_label <- selected_celltypes[[1]]
+spe_sub <- spe[,spe$celltype %in% ct_label]
+spe_sub_rast_gexp <- SEraster::rasterizeGeneExpression(spe_sub, assay_name = "counts", resolution = resolution, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+for (gene in selected_genes) {
+  ## plot single cell
+  df <- data.frame(x = spatialCoords(spe_sub)[,1], y = spatialCoords(spe_sub)[,2], gene = assay(spe_sub, "counts")[gene,])
+  ggplot(df, aes(x = x, y = y, col = gene)) +
+    coord_fixed() +
+    rasterise(geom_point(size = 1, stroke = 0), dpi = 300) +
+    scale_color_viridis_c() +
+    geom_hline(yintercept = grid_coord[,2], linetype = "solid", color = "gray") +
+    geom_vline(xintercept = grid_coord[,1], linetype = "solid",color = "gray") +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_sc_celltype_", ct_label, "_gene_", gene, ".pdf")))
+  
+  ## plot rasterized
+  df <- data.frame(x = spatialCoords(spe_sub_rast_gexp)[,1], y = spatialCoords(spe_sub_rast_gexp)[,2], gene = assay(spe_sub_rast_gexp, "pixelval")[gene,])
+  ggplot(df, aes(x = x, y = y, fill = gene)) +
+    coord_fixed() +
+    geom_tile(color = "gray") +
+    scale_fill_viridis_c() +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_celltype_", ct_label, "_gene_", gene, ".pdf")))
+}
+
+## cell type
+for (ct_label in selected_celltypes) {
+  ## plot single cell
+  ## subset by cell type
+  spe_sub <- spe[,spe$celltype %in% ct_label]
+  ggplot(data.frame(spatialCoords(spe)), aes(x = x, y = y)) +
+    coord_fixed() +
+    rasterise(geom_point(color = "lightgray", size = 1, stroke = 0), dpi = 300) +
+    rasterise(geom_point(data = data.frame(spatialCoords(spe_sub)), aes(x = x, y = y), color = col_celltype[[ct_label]], size = 1, stroke = 0), dpi = 300) +
+    geom_hline(yintercept = grid_coord[,2], linetype = "solid", color = "gray") +
+    geom_vline(xintercept = grid_coord[,1], linetype = "solid",color = "gray") +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_sc_celltype_", ct_label, ".pdf")))
+  
+  ## plot rasterized
+  df <- data.frame(x = spatialCoords(spe_rast_ct)[,1], y = spatialCoords(spe_rast_ct)[,2], celltype = assay(spe_rast_ct, "pixelval")[ct_label,])
+  ggplot(df, aes(x = x, y = y, fill = celltype)) +
+    coord_fixed() +
+    geom_tile(color = "gray") +
+    scale_fill_viridis_c(option = "inferno") +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_celltype_", ct_label, ".pdf")))
+}
+
+## plot inferno legend
+ggplot(df, aes(x = x, y = y, fill = celltype)) +
+  coord_fixed() +
+  geom_tile(color = "gray") +
+  scale_fill_viridis_c(option = "inferno") +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_global_celltype_", ct_label, "with_legend.pdf")))
+
+## plot various resolutions
 res_list <- list(50, 100, 200, 400)
 
 for (res in res_list) {

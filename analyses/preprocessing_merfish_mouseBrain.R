@@ -44,8 +44,10 @@ plot(pos, pch=".")
 ## density of feature x observation matrix
 calculateDensity(gexp)
 
-## load another metadata
-meta2 <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/MERFISH_cortex_For_Daniel/s1r1_metadata.csv.gz', row.names = 1)
+## load cell type annotations
+ct_labels <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/MERFISH_cortex_For_Daniel/STalign_celltypeannotations_merfishslices.csv.gz', row.names = 1)
+rownames(ct_labels) <- paste0("cell-", rownames(ct_labels))
+
 
 # Preprocessing -----------------------------------------------------------
 
@@ -91,9 +93,13 @@ calculateDensity(gexp_lognorm)
 
 # format into SpatialExperiment class -------------------------------------
 
+coldata <- ct_labels[rownames(ct_labels) %in% good_cells,"celltype", drop = FALSE]
+coldata$celltype <- as.factor(coldata$celltype)
+
 spe <- SpatialExperiment::SpatialExperiment(
   assays = list(counts = gexp, lognorm = gexp_lognorm),
-  spatialCoords = as.matrix(pos)
+  spatialCoords = as.matrix(pos),
+  colData = coldata
 )
 
 saveRDS(spe, file = "outputs/merfish_mouseBrain_preprocessed.RDS")

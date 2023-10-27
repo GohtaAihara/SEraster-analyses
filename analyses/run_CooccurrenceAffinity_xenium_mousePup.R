@@ -185,7 +185,7 @@ col_clu <- gg_color_hue(length(levels(ct_labels)))
 df <- data.frame(spatialCoords(spe), colData(spe))
 ggplot(df, aes(x = x, y = y, col = cluster)) +
   coord_fixed() +
-  rasterize(geom_point(size = 0.01), dpi = 300) +
+  rasterize(geom_point(size = 0.1, stroke = 0), dpi = 300) +
   scale_color_manual(values = col_clu) +
   labs(title = "Single cell",
        col = "Cluster") +
@@ -388,20 +388,42 @@ for (res in res_list) {
   ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_sym_clustering_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
 }
 
-## test visualization
+## Figure (CooccurrenceAffinity heatmap, pyramid)
 res <- 100
-df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
 alpha <- 0.05
-ggplot(df, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+## load data
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+## create symmetric data
+df_flipped <- df[df$celltypeA != df$celltypeB,]
+df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
+df_sym <- rbind(df, df_flipped)
+## use symmetric (redundant) data
+## reset label order
+df_sym <- df_sym %>%
+  mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
+         celltypeB = factor(celltypeB, levels(ct_labels)))
+## reorganize into matrix
+df_heatmap_sym <- cast(df_sym, celltypeA ~ celltypeB, value = "alpha")
+df_heatmap_sym <- df_heatmap_sym[,-1]
+isSymmetric.matrix(as.matrix(df_heatmap_sym))
+## cluster
+hc_sym <- hclust(dist(df_heatmap_sym))
+## reorder labels
+df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym$order])
+df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym$order])
+## plot
+ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+  coord_fixed() +
   geom_tile(linewidth = 0.5) +
+  scale_x_discrete(position = "top") +
   scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red") +
-  scale_color_manual(name = paste0("p value <= ", alpha), values = c("lightgrey", "black")) +
-  labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res, ")"),
-       x = "Cluster A",
+  scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
+  labs(x = "Cluster A",
        y = "Cluster B") +
-  theme_bw()
-ggsave(filename = here("plots", dataset_name, method, "test.pdf"), width = 12, height = 10, dpi = 300)
-
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0, hjust=0),
+        axis.text.y = element_text(angle = 45, vjust = 0, hjust=1))
+ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_sym_clustering_resolution_", res, "_pyramid.pdf")), width = 12, height = 10, dpi = 300)
 
 ## Figure (visual inspection of spatial niches)
 niches <- list(
@@ -441,4 +463,34 @@ for (clusters in niches) {
       axis.ticks = element_blank(),
     )
   ggsave(filename = here("plots", dataset_name, method, paste0("singlecell_niche_clusters_", paste(clusters, collapse = "_"), ".pdf")), width = 4, height = 5, dpi = 300)
+}
+
+## for poster
+for (clusters in niches) {
+  ## subset by clusters
+  spe_sub <- spe[,spe$cluster %in% clusters]
+  
+  ## plot
+  df <- data.frame(spatialCoords(spe))
+  df_sub <- data.frame(x = spatialCoords(spe_sub)[,1], y = spatialCoords(spe_sub)[,2], cluster = colData(spe_sub)$cluster)
+  ggplot(df, aes(x = x, y = y)) +
+    coord_fixed() +
+    rasterise(geom_point(color = "lightgray", size = 0.1, stroke = 0), dpi = 300) +
+    rasterise(geom_point(data = df_sub, aes(x = x, y = y, col = cluster), size = 0.1, stroke = 0), dpi = 300) +
+    scale_color_manual(values = col_clu[clusters]) +
+    guides(col = guide_legend(override.aes = list(size = 3))) +
+    # scale_color_manual(name = "Clusters", values = gg_color_hue(67)) +
+    labs(title = paste0("Clusters = ", paste(clusters, collapse = ", ")),
+         x = "x (um)",
+         y = "y (um)") +
+    theme_bw() +
+    theme(
+      legend.title = element_blank(),
+      legend.position = "bottom",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(filename = here("plots", dataset_name, method, paste0("singlecell_niche_clusters_", paste(clusters, collapse = "_"), "_v2.pdf")), width = 6, height = 12, dpi = 300)
 }
