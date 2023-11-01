@@ -28,10 +28,10 @@ method <- "nnSVG"
 
 spe <- readRDS(file = "outputs/xenium_mousePup_preprocessed.RDS")
 
-df <- data.frame(spatialCoords(spe), colData(spe))
-ggplot(df, aes(x = x, y = y, col = cluster)) +
-  geom_point(size = 0.1) +
-  theme_classic()
+# df <- data.frame(spatialCoords(spe), colData(spe))
+# ggplot(df, aes(x = x, y = y, col = cluster)) +
+#   geom_point(size = 0.1) +
+#   theme_classic()
 
 ct_labels <- colData(spe)$cluster
 
@@ -113,6 +113,17 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
 ## save results
 saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific.RDS")))
 
+## test single-cell resolution
+system.time({
+  spe <- nnSVG::nnSVG(
+    spe,
+    assay_name = "lognorm",
+    BPPARAM = BiocParallel::MulticoreParam()
+  )
+})
+df <- tibble::rownames_to_column(as.data.frame(rowData(spe)), var = "gene")
+nnsvg_results <- data.frame(dataset = dataset_name, resolution = res, num_cells = dim(spe)[2], num_pixels = dim(spe_rast)[2], df)
+saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_singlecel;.RDS")))
 
 # Plot --------------------------------------------------------------------
 

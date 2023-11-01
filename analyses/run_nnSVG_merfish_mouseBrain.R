@@ -509,7 +509,7 @@ for (res in res_list) {
 }
 
 
-## Figure 1b (runtime and memory comparison)
+## Figure 2c (runtime and memory comparison)
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
 df$resolution <- factor(df$resolution, levels = c("singlecell", "50", "100", "200", "400"))
 
@@ -614,7 +614,7 @@ df_perf <- do.call(rbind, lapply(unique(df$resolution), function(res) {
     sc <- df[df$resolution == "singlecell",]
     rast <- df[df$resolution == res,]
     results_sig <- do.call(rbind, lapply(rast$gene, function(gene) {
-      return(data.frame(gene = gene, pixel = rast[rast$gene == gene, "padj"] <= alpha, singlecell = sc[sc$gene == gene, "padj"] <= alpha))
+      return(data.frame(gene = gene, pred = rast[rast$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
     }))
     out <- calculatePerformanceMetrics(results_sig)
     return(data.frame(resolution = res, out))
