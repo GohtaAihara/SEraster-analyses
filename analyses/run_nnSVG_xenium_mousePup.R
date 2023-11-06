@@ -18,6 +18,7 @@ library(here)
 library(tidyr)
 library(tibble)
 library(dplyr)
+library(bench)
 
 par(mfrow=c(1,1))
 
@@ -112,6 +113,24 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
 }))
 ## save results
 saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific.RDS")))
+
+## runtime
+res <- 100
+runtime <- bench::mark(
+  {
+    ## rasterization
+    spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+    
+    ## nnSVG
+    spe_rast <- nnSVG::nnSVG(
+      spe_rast,
+      assay_name = "pixelval",
+      BPPARAM = BiocParallel::MulticoreParam()
+    )
+  },
+  iterations = 5,
+  memory = FALSE
+)
 
 ## test single-cell resolution
 system.time({
