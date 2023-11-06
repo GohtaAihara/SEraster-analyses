@@ -14,6 +14,7 @@ library(Matrix)
 library(R.utils)
 library(ggplot2)
 library(gridExtra)
+library(ggrastr)
 library(here)
 library(tidyr)
 library(tibble)
@@ -114,23 +115,45 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
 ## save results
 saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific.RDS")))
 
-## runtime
-res <- 100
-runtime <- bench::mark(
-  {
-    ## rasterization
-    spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
-    
-    ## nnSVG
-    spe_rast <- nnSVG::nnSVG(
-      spe_rast,
-      assay_name = "pixelval",
-      BPPARAM = BiocParallel::MulticoreParam()
-    )
-  },
-  iterations = 5,
-  memory = FALSE
-)
+## Measure runtime for each resolution
+n_itr <- 5
+
+runtime_results <- do.call(rbind, lapply(res_list, function(res) {
+  out <- do.call(rbind, lapply(seq(n_itr), function(i) {
+    print(paste0("Resolution: ", res, ", trial: ", i))
+    if (res == "singlecell") {
+      num_points = dim(spe)[2]
+      
+      start <- Sys.time()
+      nnSVG::nnSVG(
+        spe,
+        assay_name = "lognorm",
+        BPPARAM = BiocParallel::MulticoreParam()
+      )
+      runtime <- difftime(Sys.time(), start, units = "secs")
+      return(data.frame(trial = i, num_points = num_points, runtime_rast = NA, runtime_nnsvg = runtime, runtime_total = runtime))
+    } else {
+      start1 <- Sys.time()
+      spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+      runtime_rast <- difftime(Sys.time(), start1, units = "secs")
+      
+      num_points = dim(spe_rast)[2]
+      
+      start2 <- Sys.time()
+      nnSVG::nnSVG(
+        spe_rast,
+        assay_name = "pixelval",
+        BPPARAM = BiocParallel::MulticoreParam()
+      )
+      end <- Sys.time()
+      runtime_nnsvg <- difftime(end, start2, units = "secs")
+      runtime_total <- difftime(end, start1, units = "secs")
+      return(data.frame(trial = i, num_points = num_points, runtime_rast = runtime_rast, runtime_nnsvg = runtime_nnsvg, runtime_total = runtime_total))
+    }
+  }))
+  return(data.frame(dataset = dataset_name, resolution = res, out))
+}))
+saveRDS(runtime_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
 
 ## test single-cell resolution
 system.time({
@@ -148,6 +171,231 @@ saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_globa
 
 ## load gene annotation
 gene_annot <- read.csv(file = "~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/Xenium_mousePup/Xenium_mMulti_v1_metadata_v2.csv")
+col_clu <- gg_color_hue(length(levels(colData(spe)$cluster)))
+
+## Figure 1 (SEraster schematic)
+col_clu_schematic <- gg_color_hue(length(levels(colData(spe)$cluster_k10)))
+
+selected_genes <- c("Des", "Cryab", "Krt13")
+selected_celltypes <- c(1, 4, 6)
+resolution <- 1000
+spe_rast_gexp <- SEraster::rasterizeGeneExpression(spe, assay_name = "counts", resolution = resolution, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+spe_rast_ct <- SEraster::rasterizeCellType(spe, col_name = "cluster_k10", resolution = resolution, fun = "sum", BPPARAM = BiocParallel::MulticoreParam())
+
+## create bbox
+pos <- spatialCoords(spe)
+bbox <- sf::st_bbox(c(
+  xmin = floor(min(pos[,1])-resolution/2), 
+  xmax = ceiling(max(pos[,1])+resolution/2), 
+  ymin = floor(min(pos[,2])-resolution/2), 
+  ymax = ceiling(max(pos[,2])+resolution/2)
+))
+
+## create grid for rasterization
+grid <- sf::st_make_grid(bbox, cellsize = resolution)
+grid_coord <- st_coordinates(grid)
+
+## single cell total transcripts
+df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], transcripts = colSums(assay(spe, "counts")), celltype = colData(spe)$cluster_k10)
+ggplot(df, aes(x = x, y = y, col = transcripts)) +
+  coord_fixed() +
+  rasterise(geom_point(size = 0.1, stroke = 0), dpi = 300) +
+  scale_color_viridis_c() +
+  theme_bw() +
+  theme(
+    legend.position="none",
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_sc_global_tot_counts.pdf")), width = 6, height = 12, dpi = 300)
+
+## single cell celltypes
+ggplot(df, aes(x = x, y = y, col = celltype)) +
+  coord_fixed() +
+  rasterise(geom_point(size = 0.1, stroke = 0), dpi = 300) +
+  scale_color_manual(name = "Cell type", values = col_clu_schematic) +
+  guides(col = guide_legend(override.aes = list(size = 3))) +
+  theme_bw() +
+  theme(
+    legend.position="right",
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_sc_global_celltype_with_legends.pdf")), width = 6, height = 12, dpi = 300)
+
+ggplot(df, aes(x = x, y = y, col = celltype)) +
+  coord_fixed() +
+  rasterise(geom_point(size = 0.1, stroke = 0), dpi = 300) +
+  scale_color_manual(name = "Cell type", values = col_clu_schematic) +
+  guides(col = guide_legend(override.aes = list(size = 3))) +
+  theme_bw() +
+  theme(
+    legend.position="none",
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_sc_global_celltype_without_legends.pdf")), width = 6, height = 12, dpi = 300)
+
+## global gene expression
+for (gene in selected_genes) {
+  ## plot single cell
+  df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = assay(spe, "counts")[gene,])
+  ggplot(df, aes(x = x, y = y, col = gene)) +
+    coord_fixed() +
+    rasterise(geom_point(size = 0.1, stroke = 0), dpi = 300) +
+    scale_color_viridis_c() +
+    geom_hline(yintercept = grid_coord[,2], linetype = "solid", color = "black") +
+    geom_vline(xintercept = grid_coord[,1], linetype = "solid",color = "black") +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_sc_global_gene_", gene, ".pdf")), width = 6, height = 12, dpi = 300)
+  
+  ## plot rasterized
+  df <- data.frame(x = spatialCoords(spe_rast_gexp)[,1], y = spatialCoords(spe_rast_gexp)[,2], gene = assay(spe_rast_gexp, "pixelval")[gene,])
+  ggplot(df, aes(x = x, y = y, fill = gene)) +
+    coord_fixed() +
+    geom_tile(color = "gray") +
+    scale_fill_viridis_c() +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_global_gene_", gene, ".pdf")), width = 6, height = 12, dpi = 300)
+}
+
+## cell type-specific gene expression
+## subset by cell type
+ct_label <- selected_celltypes[[1]]
+spe_sub <- spe[,spe$cluster_k10 %in% ct_label]
+spe_sub_rast_gexp <- SEraster::rasterizeGeneExpression(spe_sub, assay_name = "counts", resolution = resolution, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+for (gene in selected_genes) {
+  ## plot single cell
+  df <- data.frame(x = spatialCoords(spe_sub)[,1], y = spatialCoords(spe_sub)[,2], gene = assay(spe_sub, "counts")[gene,])
+  ggplot(df, aes(x = x, y = y, col = gene)) +
+    coord_fixed() +
+    rasterise(geom_point(size = 0.1, stroke = 0), dpi = 300) +
+    scale_color_viridis_c() +
+    geom_hline(yintercept = grid_coord[,2], linetype = "solid", color = "black") +
+    geom_vline(xintercept = grid_coord[,1], linetype = "solid",color = "black") +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_sc_celltype_", ct_label, "_gene_", gene, ".pdf")), width = 6, height = 12, dpi = 300)
+  
+  ## plot rasterized
+  df <- data.frame(x = spatialCoords(spe_sub_rast_gexp)[,1], y = spatialCoords(spe_sub_rast_gexp)[,2], gene = assay(spe_sub_rast_gexp, "pixelval")[gene,])
+  ggplot(df, aes(x = x, y = y, fill = gene)) +
+    coord_fixed() +
+    geom_tile(color = "gray") +
+    scale_fill_viridis_c() +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_celltype_", ct_label, "_gene_", gene, ".pdf")), width = 6, height = 12, dpi = 300)
+}
+
+## cell type
+for (ct_label in selected_celltypes) {
+  ## plot single cell
+  ## subset by cell type
+  spe_sub <- spe[,spe$cluster_k10 %in% ct_label]
+  ggplot(data.frame(spatialCoords(spe)), aes(x = x, y = y)) +
+    coord_fixed() +
+    rasterise(geom_point(color = "lightgray", size = 0.1, stroke = 0), dpi = 300) +
+    rasterise(geom_point(data = data.frame(spatialCoords(spe_sub)), aes(x = x, y = y), color = col_clu_schematic[[ct_label]], size = 0.1, stroke = 0), dpi = 300) +
+    geom_hline(yintercept = grid_coord[,2], linetype = "solid", color = "black") +
+    geom_vline(xintercept = grid_coord[,1], linetype = "solid",color = "black") +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_sc_celltype_", ct_label, ".pdf")), width = 6, height = 12, dpi = 300)
+  
+  ## plot rasterized
+  df <- data.frame(x = spatialCoords(spe_rast_ct)[,1], y = spatialCoords(spe_rast_ct)[,2], celltype = assay(spe_rast_ct, "pixelval")[ct_label,])
+  ggplot(df, aes(x = x, y = y, fill = celltype)) +
+    coord_fixed() +
+    geom_tile(color = "gray") +
+    scale_fill_viridis_c(option = "inferno") +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_celltype_", ct_label, ".pdf")), width = 6, height = 12, dpi = 300)
+}
+
+## plot inferno legend  
+ggplot(df, aes(x = x, y = y, fill = celltype)) +
+  coord_fixed() +
+  geom_tile(color = "gray") +
+  scale_fill_viridis_c(option = "inferno") +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_global_celltype_", ct_label, "with_legend.pdf")), width = 6, height = 12, dpi = 300)
+
+## plot various resolutions
+res_list <- list(50, 100, 200, 400)
+
+for (res in res_list) {
+  ## rasterize
+  spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "counts", resolution = res, fun = "sum", BPPARAM = BiocParallel::MulticoreParam())
+  
+  ## plot
+  df <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], transcripts = colSums(assay(spe_rast)))
+  plt <- ggplot(df, aes(x = x, y = y, fill = transcripts)) +
+    coord_fixed() +
+    geom_tile() +
+    scale_fill_viridis_c() +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ## save plot
+  ggsave(plot = plt, filename = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_resolution_", res, ".pdf")))
+}
 
 ## Figure 3B (global vs. cluster-specific SVG)
 ## cluster 39 (kidney)

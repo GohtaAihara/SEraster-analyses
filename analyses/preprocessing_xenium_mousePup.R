@@ -13,6 +13,7 @@ library(SpatialExperiment)
 library(Matrix)
 library(ggplot2)
 library(rhdf5)
+library(dplyr)
 
 par(mfrow=c(1,1))
 
@@ -53,7 +54,9 @@ plot(meta$cell_area, meta$nucleus_area, pch=".")
 
 ## load analysis clusters
 clusters <- read.csv("~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/Xenium_mousePup/analysis/clustering/gene_expression_graphclust/clusters.csv")
+clusters_k10 <- read.csv("~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/Xenium_mousePup/analysis/clustering/gene_expression_kmeans_10_clusters/clusters.csv")
 rownames(clusters) <- clusters$Barcode
+rownames(clusters_k10) <- clusters$Barcode
 
 rownames(meta) <- rownames(pos) <- colnames(gexp)
 
@@ -110,9 +113,12 @@ calculateDensity(gexp_lognorm)
 
 # Format into SpatialExperiment class -------------------------------------
 
-coldata <- clusters[rownames(clusters) %in% good_cells,"Cluster", drop = FALSE]
-colnames(coldata) <- c("cluster")
-coldata$cluster <- as.factor(coldata$cluster)
+cluster <- clusters[rownames(clusters) %in% good_cells,"Cluster", drop = FALSE]
+colnames(cluster) <- "cluster"
+cluster_k10 <- clusters_k10[rownames(clusters_k10) %in% good_cells,"Cluster", drop = FALSE]
+colnames(cluster_k10) <- "cluster_k10"
+coldata <- cbind(cluster, cluster_k10) %>%
+  mutate(cluster = as.factor(cluster), cluster_k10 = as.factor(cluster_k10))
 
 spe <- SpatialExperiment::SpatialExperiment(
   assays = list(counts = gexp, lognorm = gexp_lognorm),
