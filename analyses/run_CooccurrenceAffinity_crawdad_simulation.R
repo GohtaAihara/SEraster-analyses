@@ -54,7 +54,7 @@ CI_lev <- 0.95
 pval_method <- "Blaker"
 
 ## permutate by rotations
-n_rotation <- 1
+n_rotation <- 10
 angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
 
 affinity_results <- do.call(rbind, lapply(res_list, function(res) {
@@ -132,6 +132,7 @@ saveRDS(affinity_results, file = here("outputs", paste0(dataset_name, "_Cooccurr
 # Plots -------------------------------------------------------------------
 
 ## Figure (resolution vs. alpha)
+n_rotation <- 10
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_n_rotation_", n_rotation, ".RDS")))
 
 p1 <- ggplot(df, aes(x = resolution, y = alpha, col = pair)) +

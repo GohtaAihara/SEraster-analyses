@@ -116,39 +116,29 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
 saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific.RDS")))
 
 ## Measure runtime for each resolution
+res_list <- list(100)
 n_itr <- 5
 
 runtime_results <- do.call(rbind, lapply(res_list, function(res) {
   out <- do.call(rbind, lapply(seq(n_itr), function(i) {
     print(paste0("Resolution: ", res, ", trial: ", i))
-    if (res == "singlecell") {
-      num_points = dim(spe)[2]
-      
-      start <- Sys.time()
-      nnSVG::nnSVG(
-        spe,
-        assay_name = "lognorm",
-        BPPARAM = BiocParallel::MulticoreParam()
-      )
-      runtime <- difftime(Sys.time(), start, units = "secs")
-      return(data.frame(trial = i, num_points = num_points, runtime_rast = NA, runtime_nnsvg = runtime, runtime_total = runtime))
+    start1 <- Sys.time()
+    spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+    runtime_rast <- difftime(Sys.time(), start1, units = "secs")
+    
+    start2 <- Sys.time()
+    spe_rast <- try({nnSVG::nnSVG(
+      spe_rast,
+      assay_name = "pixelval",
+      BPPARAM = BiocParallel::MulticoreParam()
+    )})
+    end <- Sys.time()
+    runtime_nnsvg <- difftime(end, start2, units = "secs")
+    runtime_total <- difftime(end, start1, units = "secs")
+    if (class(spe_rast) == "SpatialExperiment") {
+      return(data.frame(trial = i, num_pixels = dim(spe_rast)[2], runtime_rast = runtime_rast, runtime_nnsvg = runtime_nnsvg, runtime_total = runtime_total))
     } else {
-      start1 <- Sys.time()
-      spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
-      runtime_rast <- difftime(Sys.time(), start1, units = "secs")
-      
-      num_points = dim(spe_rast)[2]
-      
-      start2 <- Sys.time()
-      nnSVG::nnSVG(
-        spe_rast,
-        assay_name = "pixelval",
-        BPPARAM = BiocParallel::MulticoreParam()
-      )
-      end <- Sys.time()
-      runtime_nnsvg <- difftime(end, start2, units = "secs")
-      runtime_total <- difftime(end, start1, units = "secs")
-      return(data.frame(trial = i, num_points = num_points, runtime_rast = runtime_rast, runtime_nnsvg = runtime_nnsvg, runtime_total = runtime_total))
+      return(NULL)
     }
   }))
   return(data.frame(dataset = dataset_name, resolution = res, out))
@@ -281,14 +271,18 @@ for (gene in selected_genes) {
 
 ## cell type-specific gene expression
 ## subset by cell type
-ct_label <- selected_celltypes[[1]]
+ct_label <- selected_celltypes[[3]]
 spe_sub <- spe[,spe$cluster_k10 %in% ct_label]
 spe_sub_rast_gexp <- SEraster::rasterizeGeneExpression(spe_sub, assay_name = "counts", resolution = resolution, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
-for (gene in selected_genes) {
+selected_genes_ct <- c("Rbp2", "C3", "Ambp")
+df_background_sc <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2])
+df_background_rast <- data.frame(x = spatialCoords(spe_rast_gexp)[,1], y = spatialCoords(spe_rast_gexp)[,2])
+for (gene in selected_genes_ct) {
   ## plot single cell
   df <- data.frame(x = spatialCoords(spe_sub)[,1], y = spatialCoords(spe_sub)[,2], gene = assay(spe_sub, "counts")[gene,])
   ggplot(df, aes(x = x, y = y, col = gene)) +
     coord_fixed() +
+    rasterise(geom_point(data = df_background_sc, aes(x = x, y = y), size = 0.1, stroke = 0, color = "white"), dpi = 300) +
     rasterise(geom_point(size = 0.1, stroke = 0), dpi = 300) +
     scale_color_viridis_c() +
     geom_hline(yintercept = grid_coord[,2], linetype = "solid", color = "black") +
@@ -307,13 +301,14 @@ for (gene in selected_genes) {
   df <- data.frame(x = spatialCoords(spe_sub_rast_gexp)[,1], y = spatialCoords(spe_sub_rast_gexp)[,2], gene = assay(spe_sub_rast_gexp, "pixelval")[gene,])
   ggplot(df, aes(x = x, y = y, fill = gene)) +
     coord_fixed() +
+    geom_tile(data = df_background_rast, aes(x = x, y = y), color = "white", fill = "white") +
     geom_tile(color = "gray") +
     scale_fill_viridis_c() +
     theme_bw() +
     theme(
       legend.position="none",
       panel.grid = element_blank(),
-      axis.title = element_blank(),
+      axis.title = element_blank(), 
       axis.text = element_blank(),
       axis.ticks = element_blank(),
     )
@@ -373,7 +368,7 @@ ggplot(df, aes(x = x, y = y, fill = celltype)) +
 ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_global_celltype_", ct_label, "with_legend.pdf")), width = 6, height = 12, dpi = 300)
 
 ## plot various resolutions
-res_list <- list(50, 100, 200, 400)
+res_list <- list(100, 200, 400, 800)
 
 for (res in res_list) {
   ## rasterize
@@ -394,7 +389,52 @@ for (res in res_list) {
       axis.ticks = element_blank(),
     )
   ## save plot
-  ggsave(plot = plt, filename = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_resolution_", res, ".pdf")))
+  ggsave(plot = plt, filename = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_resolution_", res, ".pdf")), width = 6, height = 12, dpi = 300)
+}
+
+## plot permutations
+## make a list of SpatialExperiment
+n_rotation <- 6
+angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
+
+spe_list <- lapply(angle_deg_list, function(deg) {
+  spe_rotated <- SpatialExperiment::SpatialExperiment(
+    assays <- assays(spe),
+    spatialCoords = rotateAroundCenter(spatialCoords(spe), deg),
+    colData = colData(spe)
+  )
+})
+names(spe_list) <- angle_deg_list
+
+resolution <- 800
+
+spe_rast_gexp_list <- SEraster::rasterizeGeneExpression(spe_list, assay_name = "counts", resolution = resolution, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+
+gene <- selected_genes[[2]]
+df_bounds <- do.call(rbind, lapply(spe_rast_gexp_list, function(spe_rast_gexp) {
+  df <- data.frame(spatialCoords(spe_rast_gexp))
+  data.frame(xmin = min(df$x), xmax = max(df$x), ymin = min(df$y), ymax = max(df$y))
+}))
+
+for (i in seq_along(spe_rast_gexp_list)) {
+  spe_rast_gexp <- spe_rast_gexp_list[[i]]
+  ## plot rasterized
+  df <- data.frame(x = spatialCoords(spe_rast_gexp)[,1], y = spatialCoords(spe_rast_gexp)[,2], gene = assay(spe_rast_gexp, "pixelval")[gene,])
+  ggplot(df, aes(x = x, y = y, fill = gene)) +
+    coord_fixed() +
+    geom_tile(color = "gray") +
+    scale_fill_viridis_c() +
+    xlim(min(df_bounds$xmin), max(df_bounds$xmax)) +
+    ylim(min(df_bounds$ymin), max(df_bounds$ymax)) +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_schematic_rast_rotation_deg_", names(spe_rast_gexp_list)[i], ".pdf")), dpi = 300)
 }
 
 ## Figure 3B (global vs. cluster-specific SVG)
@@ -888,6 +928,22 @@ ggplot(df_ct_specific, aes(x = x, y = y, fill =　exp)) +
     axis.ticks = element_blank(),
   )
 ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_nnsvg_ct_specific_resolution_", res, "_cluster_", ct_label, "_v2.pdf")), dpi = 300)
+
+## Figure (run time)
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
+df_plt <- df %>%
+  pivot_longer(!c("dataset", "resolution", "trial", "num_pixels"), names_to = "step", values_to = "time")
+ggplot(df_plt, aes(x = step, y = time, col = step)) +
+  geom_jitter() +
+  geom_boxplot() +
+  ylim(0,NA) +
+  theme_bw()
+
+#summarise
+df_summary <- df %>%
+  pivot_longer(!c("dataset", "resolution", "trial", "num_pixels"), names_to = "step", values_to = "time") %>%
+  group_by(step) %>%
+  summarise(mean = mean(time), sd =)
 
 # Further exploration -----------------------------------------------------
 
