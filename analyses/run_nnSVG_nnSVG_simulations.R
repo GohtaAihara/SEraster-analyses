@@ -471,85 +471,150 @@ ggplot(df_perf_raw, aes(x = resolution, y = values, col = metrics)) +
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary_v2.pdf")), width = 12, heigh = 10, dpi = 300)
 
 
-## simulations for shuffle based on medium bandwidth, medium expression
-sim_names_shuffle <- c(
-  "sim_shuffle00", 
-  "sim_shuffle01", 
-  "sim_shuffle02", 
-  "sim_shuffle03", 
-  "sim_shuffle04", 
-  "sim_shuffle05", 
-  "sim_shuffle06", 
-  "sim_shuffle07", 
-  "sim_shuffle08", 
-  "sim_shuffle09", 
-  "sim_shuffle10"
-)
+# ## simulations for shuffle based on medium bandwidth, medium expression
+# sim_names_shuffle <- c(
+#   "sim_shuffle00", 
+#   "sim_shuffle01", 
+#   "sim_shuffle02", 
+#   "sim_shuffle03", 
+#   "sim_shuffle04", 
+#   "sim_shuffle05", 
+#   "sim_shuffle06", 
+#   "sim_shuffle07", 
+#   "sim_shuffle08", 
+#   "sim_shuffle09", 
+#   "sim_shuffle10"
+# )
+# 
+# # set a threshold p value
+# alpha <- 0.05
+# n_rotation <- 10
+# angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
+# df_perf <- do.call(rbind, lapply(sim_names_shuffle, function(i) {
+#   ## load original spe to get T/F labels
+#   spe <- readRDS(file = here(dir, paste0("spe_", i, ".RDS")))
+#   ## load nnSVG results
+#   df <- readRDS(file = here("outputs", dataset_name, paste0(i, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+#   
+#   out <- do.call(rbind, lapply(unique(df$resolution), function(res) {
+#     temp <- df[df$resolution == res,]
+#     out2 <- do.call(rbind, lapply(unique(temp$rotation_deg), function(deg) {
+#       temp2 <- temp[temp$rotation_deg == deg,]
+#       results_sig <- data.frame(gene = temp2$gene, pred = temp2$padj <= alpha, obs = rowData(spe)$expressed)
+#       perf <- calculatePerformanceMetrics(results_sig)
+#       return(data.frame(rotation_deg = deg, perf))
+#     }))
+#     return(data.frame(resolution = res, out2))
+#   }))
+#   
+#   meta <- as.numeric(gsub("[^0-9]", "", i))
+#   
+#   return(data.frame(dataset = i, shuffle_label = paste0(meta*10, "% shuffled"), shuffle_num = meta*10, out))
+# }))
+# 
+# df_perf_raw <- df_perf %>%
+#   mutate(resolution = factor(resolution, levels = res_list),
+#          shuffle_label = factor(shuffle_label, levels = paste0(seq(0, 100, by = 10), "% shuffled")),
+#          shuffle_num = factor(shuffle_num, levels = seq(0, 100, by = 10))) %>%
+#   select(dataset, shuffle_label, shuffle_num, resolution, rotation_deg, TPR, specificity, PPV, F1, ACC) %>%
+#   pivot_longer(!c(dataset, shuffle_label, shuffle_num, resolution, rotation_deg), names_to = "metrics", values_to = "values")
+# 
+# df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
+#   out <- do.call(rbind, lapply(unique(df_perf$dataset), function(dataset) {
+#     out2 <- do.call(rbind, lapply(c("TPR", "specificity", "PPV", "F1", "ACC"), function(metric) {
+#       temp <- df_perf[df_perf$dataset == dataset & df_perf$resolution == res, metric]
+#       return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
+#     }))
+#     
+#     meta <- as.numeric(gsub("[^0-9]", "", dataset))
+#     
+#     return(data.frame(dataset = dataset, shuffle_label = paste0(meta*10, "% shuffled"), shuffle_num = meta*10, resolution = factor(res, levels = res_list), out2))
+#   }))
+# }))
+# df_perf_summary <- df_perf_summary %>%
+#   mutate(resolution = factor(resolution, levels = res_list),
+#          shuffle_label = factor(shuffle_label, levels = paste0(seq(0, 100, by = 10), "% shuffled")))
+# 
+# ggplot(df_perf_raw, aes(x = shuffle_num, y = values, col = metrics)) +
+#   facet_wrap(~resolution) +
+#   # geom_jitter(width = 10, alpha = 0.3) +
+#   geom_line(data = df_perf_summary, aes(x = shuffle_num, y = mean, col = metrics)) +
+#   geom_point(data = df_perf_summary, aes(x = shuffle_num, y = mean, col = metrics), size = 1) +
+#   geom_errorbar(data = df_perf_summary, aes(x = shuffle_num, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics)) +
+#   # scale_x_continuous(breaks = unique(df_perf_summary$shuffle_num)) +
+#   ylim(0,1) +
+#   labs(title = "Performance metrics comparison",
+#        x = "% shuffled",
+#        y = "Performance",
+#        col = "Metric") +
+#   theme_bw() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_shuffle_perf_metric_summary.pdf")), width = 12, heigh = 8, dpi = 300)
 
-# set a threshold p value
-alpha <- 0.05
-n_rotation <- 10
-angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
-df_perf <- do.call(rbind, lapply(sim_names_shuffle, function(i) {
-  ## load original spe to get T/F labels
-  spe <- readRDS(file = here(dir, paste0("spe_", i, ".RDS")))
-  ## load nnSVG results
-  df <- readRDS(file = here("outputs", dataset_name, paste0(i, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
-  
-  out <- do.call(rbind, lapply(unique(df$resolution), function(res) {
-    temp <- df[df$resolution == res,]
-    out2 <- do.call(rbind, lapply(unique(temp$rotation_deg), function(deg) {
-      temp2 <- temp[temp$rotation_deg == deg,]
-      results_sig <- data.frame(gene = temp2$gene, pred = temp2$padj <= alpha, obs = rowData(spe)$expressed)
-      perf <- calculatePerformanceMetrics(results_sig)
-      return(data.frame(rotation_deg = deg, perf))
-    }))
-    return(data.frame(resolution = res, out2))
-  }))
-  
-  meta <- as.numeric(gsub("[^0-9]", "", i))
-  
-  return(data.frame(dataset = i, shuffle_label = paste0(meta*10, "% shuffled"), shuffle_num = meta*10, out))
-}))
+## Figure 2G (spatial visualization of small spatial pattern)
+sim_name <- "sim_smallBandwidth_fullExpr"
+spe <- readRDS(file = here(dir, paste0("spe_", sim_name, ".RDS")))
+svg_example <- which(rowData(spe)$expressed)[1]
+lim <- c(4000, 6000)
 
-df_perf_raw <- df_perf %>%
-  mutate(resolution = factor(resolution, levels = res_list),
-         shuffle_label = factor(shuffle_label, levels = paste0(seq(0, 100, by = 10), "% shuffled")),
-         shuffle_num = factor(shuffle_num, levels = seq(0, 100, by = 10))) %>%
-  select(dataset, shuffle_label, shuffle_num, resolution, rotation_deg, TPR, specificity, PPV, F1, ACC) %>%
-  pivot_longer(!c(dataset, shuffle_label, shuffle_num, resolution, rotation_deg), names_to = "metrics", values_to = "values")
-
-df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
-  out <- do.call(rbind, lapply(unique(df_perf$dataset), function(dataset) {
-    out2 <- do.call(rbind, lapply(c("TPR", "specificity", "PPV", "F1", "ACC"), function(metric) {
-      temp <- df_perf[df_perf$dataset == dataset & df_perf$resolution == res, metric]
-      return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
-    }))
-    
-    meta <- as.numeric(gsub("[^0-9]", "", dataset))
-    
-    return(data.frame(dataset = dataset, shuffle_label = paste0(meta*10, "% shuffled"), shuffle_num = meta*10, resolution = factor(res, levels = res_list), out2))
-  }))
-}))
-df_perf_summary <- df_perf_summary %>%
-  mutate(resolution = factor(resolution, levels = res_list),
-         shuffle_label = factor(shuffle_label, levels = paste0(seq(0, 100, by = 10), "% shuffled")))
-
-ggplot(df_perf_raw, aes(x = shuffle_num, y = values, col = metrics)) +
-  facet_wrap(~resolution) +
-  # geom_jitter(width = 10, alpha = 0.3) +
-  geom_line(data = df_perf_summary, aes(x = shuffle_num, y = mean, col = metrics)) +
-  geom_point(data = df_perf_summary, aes(x = shuffle_num, y = mean, col = metrics), size = 1) +
-  geom_errorbar(data = df_perf_summary, aes(x = shuffle_num, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics)) +
-  # scale_x_continuous(breaks = unique(df_perf_summary$shuffle_num)) +
-  ylim(0,1) +
-  labs(title = "Performance metrics comparison",
-       x = "% shuffled",
-       y = "Performance",
-       col = "Metric") +
+df <- data.frame(spatialCoords(spe), gene = assay(spe)[svg_example,])
+ggplot(df, aes(x = x, y = y, col = gene)) +
+  coord_fixed() +
+  geom_point(size = 12) +
+  scale_color_viridis_c() +
+  xlim(lim) +
+  ylim(lim) +
+  labs(title = "Single cell") +
   theme_bw() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_shuffle_perf_metric_summary.pdf")), width = 12, heigh = 8, dpi = 300)
+  theme(
+    legend.position="none",
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+ggsave(filename = here("plots", dataset_name, paste0(sim_name, "_closeup_singlecell.pdf")), width = 10, height = 10, dpi = 300)
+
+res_list <- c(60, 120, 180, 240, 300, 360, 420)
+
+for (res in res_list) {
+  ## rasterize
+  spe_rast <- SEraster::rasterizeGeneExpression(spe, resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+  
+  ## plot
+  df <- data.frame(spatialCoords(spe_rast), gene = assay(spe_rast)[svg_example,])
+  ggplot(df, aes(x = x, y = y, fill = gene)) +
+    coord_fixed() +
+    geom_tile() +
+    scale_fill_viridis_c() +
+    xlim(lim) +
+    ylim(lim) +
+    labs(title = paste0(res)) +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  # ggplot(df, aes(x = x, y = y, col = gene)) +
+  #   coord_fixed() +
+  #   geom_point() +
+  #   scale_color_viridis_c() +
+  #   xlim(lim) +
+  #   ylim(lim) +
+  #   labs(title = paste0(res)) +
+  #   theme_bw() +
+  #   theme(
+  #     legend.position="none",
+  #     panel.grid = element_blank(),
+  #     axis.title = element_blank(),
+  #     axis.text = element_blank(),
+  #     axis.ticks = element_blank(),
+  #   )
+  ggsave(filename = here("plots", dataset_name, paste0(sim_name, "_closeup_rast_", res, ".pdf")), width = 10, height = 10, dpi = 300)
+}
 
 # Further exploration -----------------------------------------------------
 

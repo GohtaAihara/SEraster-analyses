@@ -131,6 +131,26 @@ saveRDS(affinity_results, file = here("outputs", paste0(dataset_name, "_Cooccurr
 
 # Plots -------------------------------------------------------------------
 
+col_clu <- gg_color_hue(length(levels(ct_labels)))
+names(col_clu) <- levels(ct_labels)
+
+## Figure 3a (cell type single-cell resolution)
+df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], celltypes = colData(spe)$celltypes)
+ggplot(df, aes(x = x, y = y, col = celltypes)) +
+  coord_fixed() +
+  rasterise(geom_point(size = 2, stroke = 0), dpi = 300) +
+  scale_color_manual(name = "Cell type", values = col_clu) +
+  guides(col = guide_legend(override.aes = list(size = 3))) +
+  labs(title = "Single-cell Resolution") +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_ct_labels_sc.pdf")))
+
 ## Figure (resolution vs. alpha)
 n_rotation <- 10
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_n_rotation_", n_rotation, ".RDS")))

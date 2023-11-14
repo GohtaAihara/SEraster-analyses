@@ -532,8 +532,8 @@ ggplot(df, aes(x = num_points, y = as.numeric(runtime_total), col = resolution))
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_total.pdf")), width = 6, heigh = 5, dpi = 300)
 
 ggplot(df, aes(x = resolution, y = as.numeric(runtime_total), col = resolution)) +
-  geom_boxplot(lwd = 0.75, outlier.shape = NA) +
-  geom_jitter(width = 0.1, alpha = 0.75) +
+  geom_boxplot(lwd = 0.5, outlier.shape = NA) +
+  geom_jitter(width = 0.2, alpha = 0.75) +
   scale_color_manual(values = col_res) +
   labs(title = "Total runtime",
        x = "Resolution",
@@ -543,7 +543,7 @@ ggplot(df, aes(x = resolution, y = as.numeric(runtime_total), col = resolution))
   theme(panel.grid.minor.x = element_blank(), 
         panel.grid.minor.y = element_blank(),
         legend.position = "none")
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_total_v2.pdf")), width = 5, heigh = 5, dpi = 300)
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_total_v2.pdf")), width = 4, height = 8, dpi = 300)
 
 # nnSVG runtime
 ggplot(df, aes(x = num_points, y = as.numeric(runtime_nnsvg), col = resolution)) +
