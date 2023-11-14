@@ -21,6 +21,7 @@ library(tidyr)
 library(tibble)
 library(dplyr)
 library(reshape)
+library(DescTools)
 
 par(mfrow=c(1,1))
 
@@ -186,41 +187,41 @@ ct_label <- "Fol B cells"
 
 df <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], pixelval = assay(spe_rast, "pixelval")[ct_label,], re = assay(spe_rast, "re")[ct_label,], bin = factor(assay(spe_rast, "bin")[ct_label,], levels = c(0,1)))
 
-p1 <- ggplot(df, aes(x = x, y = y, fill = pixelval)) +
-  coord_fixed() +
-  geom_tile() +
-  scale_fill_gradient(name = "cells/pixel", low = "gray", high = col_clu[["Fol B cells"]]) +
-  theme_bw() +
-  theme(
-    panel.grid = element_blank(),
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank()
-  )
-p2 <- ggplot(df, aes(x = x, y = y, fill = re)) +
-  coord_fixed() +
-  geom_tile() +
-  scale_fill_gradient(name = "RE", low = "gray", high = col_clu[["Fol B cells"]]) +
-  theme_bw() +
-  theme(
-    panel.grid = element_blank(),
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank()
-  )
-p3 <- ggplot(df, aes(x = x, y = y, fill = bin)) +
-  coord_fixed() +
-  geom_tile() +
-  scale_fill_manual(name = "Binarized", values = c("gray",col_clu[["Fol B cells"]])) +
-  theme_bw() +
-  theme(
-    panel.grid = element_blank(),
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank()
-  )
-plt_comb <- grid.arrange(p1, p2, p3, ncol = 3, top = paste0("Cell type: ", ct_label))
-ggsave(plt_comb, filename = here("plots", dataset_name, paste0(dataset_name, "_rasterized_data_ct_col.pdf")), width = 8, height = 3, dpi = 300)
+# p1 <- ggplot(df, aes(x = x, y = y, fill = pixelval)) +
+#   coord_fixed() +
+#   geom_tile() +
+#   scale_fill_gradient(name = "cells/pixel", low = "gray", high = col_clu[["Fol B cells"]]) +
+#   theme_bw() +
+#   theme(
+#     panel.grid = element_blank(),
+#     axis.title = element_blank(),
+#     axis.text = element_blank(),
+#     axis.ticks = element_blank()
+#   )
+# p2 <- ggplot(df, aes(x = x, y = y, fill = re)) +
+#   coord_fixed() +
+#   geom_tile() +
+#   scale_fill_gradient(name = "RE", low = "gray", high = col_clu[["Fol B cells"]]) +
+#   theme_bw() +
+#   theme(
+#     panel.grid = element_blank(),
+#     axis.title = element_blank(),
+#     axis.text = element_blank(),
+#     axis.ticks = element_blank()
+#   )
+# p3 <- ggplot(df, aes(x = x, y = y, fill = bin)) +
+#   coord_fixed() +
+#   geom_tile() +
+#   scale_fill_manual(name = "Binarized", values = c("gray",col_clu[["Fol B cells"]])) +
+#   theme_bw() +
+#   theme(
+#     panel.grid = element_blank(),
+#     axis.title = element_blank(),
+#     axis.text = element_blank(),
+#     axis.ticks = element_blank()
+#   )
+# plt_comb <- grid.arrange(p1, p2, p3, ncol = 3, top = paste0("Cell type: ", ct_label))
+# ggsave(plt_comb, filename = here("plots", dataset_name, paste0(dataset_name, "_rasterized_data_ct_col.pdf")), width = 8, height = 3, dpi = 300)
 
 p1 <- ggplot(df, aes(x = x, y = y, fill = pixelval)) +
   coord_fixed() +
@@ -340,6 +341,7 @@ for (res in res_list) {
 ## order based on 1 resolution
 res_interest <- 100
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res_interest, ".RDS")))
+df <- df[(df$celltypeA != "indistinct" & df$celltypeB != "indistinct"),]
 
 ## create symmetric data
 df_flipped <- df[df$celltypeA != df$celltypeB,]
@@ -362,22 +364,38 @@ hc_sym_interest <- hclust(dist(df_heatmap_sym))
 df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym_interest$order])
 df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym_interest$order])
 ## plot
-ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+cutoff <- min(abs(range(df_sym$alpha)))
+lim <- c(-cutoff,cutoff)
+df_plt <- df_sym %>%
+  mutate(alpha = Winsorize(alpha, min(lim), max(lim)))
+ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
   coord_fixed() +
   geom_tile(linewidth = 0.5) +
-  scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red") +
-  scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
+  scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
+  scale_color_manual(name = paste0("p value ≤ ", alpha), values = c("grey", "black")) +
   labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res_interest, ")"),
        x = "Cluster A",
        y = "Cluster B") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
+# ggplot(df_plt, aes(x = celltypeA, y = celltypeB, col = alpha, size = sig_lev2)) +
+#   coord_fixed() +
+#   geom_point() +
+#   scale_color_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
+#   # scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
+#   labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res_interest, ")"),
+#        x = "Cluster A",
+#        y = "Cluster B") +
+#   theme_bw() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
+res_list <- list(50, 100, 200, 400)
 res_list_sub <- res_list[res_list != res_interest]
 for (i in seq_along(res_list)) {
   res <- res_list[[i]]
   df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+  df <- df[(df$celltypeA != "indistinct" & df$celltypeB != "indistinct"),]
   
   ## create symmetric data
   df_flipped <- df[df$celltypeA != df$celltypeB,]
@@ -399,11 +417,15 @@ for (i in seq_along(res_list)) {
   df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym_interest$order])
   df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym_interest$order])
   ## plot
-  ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+  cutoff <- min(abs(range(df_sym$alpha)))
+  lim <- c(-cutoff,cutoff)
+  df_plt <- df_sym %>%
+    mutate(alpha = Winsorize(alpha, min(lim), max(lim)))
+  ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
     coord_fixed() +
     geom_tile(linewidth = 0.5) +
-    scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = c(-10,10)) +
-    scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
+    scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
+    scale_color_manual(name = paste0("p value ≤ ", alpha), values = c("grey", "black")) +
     labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res, ")"),
          x = "Cluster A",
          y = "Cluster B") +
@@ -415,6 +437,7 @@ for (i in seq_along(res_list)) {
 ## Figure 3c (heatmap 100 um)
 res_interest <- 100
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res_interest, ".RDS")))
+df <- df[(df$celltypeA != "indistinct" & df$celltypeB != "indistinct"),]
 
 ## create symmetric data
 df_flipped <- df[df$celltypeA != df$celltypeB,]
@@ -437,14 +460,18 @@ hc_sym_interest <- hclust(dist(df_heatmap_sym))
 df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym_interest$order])
 df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym_interest$order])
 ## plot
-ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+cutoff <- min(abs(range(df_sym$alpha)))
+lim <- c(-cutoff,cutoff)
+df_plt <- df_sym %>%
+  mutate(alpha = Winsorize(alpha, min(lim), max(lim)))
+ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
   coord_fixed() +
   geom_tile(linewidth = 0.5) +
   scale_x_discrete(position = "top") +
-  scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = c(-10,10)) +
+  scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
   scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
-  labs(x = "Cluster A",
-       y = "Cluster B") +
+  labs(x = "Cluster B",
+       y = "Cluster A") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, vjust = 0, hjust=0),
         axis.text.y = element_text(angle = 45, vjust = 0, hjust=1))
