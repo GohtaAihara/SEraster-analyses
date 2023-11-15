@@ -575,7 +575,7 @@ ggplot(df, aes(x = x, y = y, col = gene)) +
   )
 ggsave(filename = here("plots", dataset_name, paste0(sim_name, "_closeup_singlecell.pdf")), width = 10, height = 10, dpi = 300)
 
-res_list <- c(60, 120, 180, 240, 300, 360, 420, 480)
+res_list <- c(60, 120, 180, 240, 300, 360, 420, 480, 540, 600)
 for (res in res_list) {
   ## create bbox
   pos <- spatialCoords(spe)
@@ -634,44 +634,6 @@ for (res in res_list) {
   ggsave(filename = here("plots", dataset_name, paste0(sim_name, "_closeup_rast_", res, ".pdf")), width = 10, height = 10, dpi = 300)
 }
 
-for (res in res_list) {
-  ## rasterize
-  spe_rast <- SEraster::rasterizeGeneExpression(spe, resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
-  
-  ## plot
-  df <- data.frame(spatialCoords(spe_rast), gene = assay(spe_rast)[svg_example,])
-  ggplot(df, aes(x = x, y = y, fill = gene)) +
-    coord_fixed() +
-    geom_tile() +
-    scale_fill_viridis_c() +
-    xlim(lim) +
-    ylim(lim) +
-    labs(title = paste0(res)) +
-    theme_bw() +
-    theme(
-      legend.position="none",
-      panel.grid = element_blank(),
-      axis.title = element_blank(),
-      axis.text = element_blank(),
-      axis.ticks = element_blank(),
-    )
-  # ggplot(df, aes(x = x, y = y, col = gene)) +
-  #   coord_fixed() +
-  #   geom_point() +
-  #   scale_color_viridis_c() +
-  #   xlim(lim) +
-  #   ylim(lim) +
-  #   labs(title = paste0(res)) +
-  #   theme_bw() +
-  #   theme(
-  #     legend.position="none",
-  #     panel.grid = element_blank(),
-  #     axis.title = element_blank(),
-  #     axis.text = element_blank(),
-  #     axis.ticks = element_blank(),
-  #   )
-  ggsave(filename = here("plots", dataset_name, paste0(sim_name, "_closeup_rast_", res, ".pdf")), width = 10, height = 10, dpi = 300)
-}
 
 # Further exploration -----------------------------------------------------
 
