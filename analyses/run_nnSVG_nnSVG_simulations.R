@@ -560,7 +560,7 @@ lim <- c(4000, 6000)
 df <- data.frame(spatialCoords(spe), gene = assay(spe)[svg_example,])
 ggplot(df, aes(x = x, y = y, col = gene)) +
   coord_fixed() +
-  geom_point(size = 12) +
+  geom_point(size = 6) +
   scale_color_viridis_c() +
   xlim(lim) +
   ylim(lim) +
@@ -575,7 +575,64 @@ ggplot(df, aes(x = x, y = y, col = gene)) +
   )
 ggsave(filename = here("plots", dataset_name, paste0(sim_name, "_closeup_singlecell.pdf")), width = 10, height = 10, dpi = 300)
 
-res_list <- c(60, 120, 180, 240, 300, 360, 420)
+res_list <- c(60, 120, 180, 240, 300, 360, 420, 480)
+for (res in res_list) {
+  ## create bbox
+  pos <- spatialCoords(spe)
+  bbox <- sf::st_bbox(c(
+    xmin = floor(min(pos[,1])-res/2), 
+    xmax = ceiling(max(pos[,1])+res/2), 
+    ymin = floor(min(pos[,2])-res/2), 
+    ymax = ceiling(max(pos[,2])+res/2)
+  ))
+  
+  ## create grid for rasterization
+  grid <- sf::st_make_grid(bbox, cellsize = res)
+  grid_coord <- st_coordinates(grid)
+  
+  ## plot
+  df <- data.frame(spatialCoords(spe), gene = assay(spe)[svg_example,])
+  ggplot(df, aes(x = x, y = y, col = gene)) +
+    coord_fixed() +
+    geom_point(size = 6) +
+    scale_color_viridis_c() +
+    geom_hline(yintercept = grid_coord[,2], linetype = "solid", color = "black") +
+    geom_vline(xintercept = grid_coord[,1], linetype = "solid",color = "black") +
+    xlim(lim) +
+    ylim(lim) +
+    labs(title = "Single cell") +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_closeup_sc_with_grids_resolution_", res, ".pdf")), width = 10, height = 10, dpi = 300)
+  
+  ## rasterize
+  spe_rast <- SEraster::rasterizeGeneExpression(spe, resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+  
+  ## plot
+  df <- data.frame(spatialCoords(spe_rast), gene = assay(spe_rast)[svg_example,])
+  ggplot(df, aes(x = x, y = y, fill = gene)) +
+    coord_fixed() +
+    geom_tile() +
+    scale_fill_viridis_c() +
+    xlim(lim) +
+    ylim(lim) +
+    labs(title = paste0(res)) +
+    theme_bw() +
+    theme(
+      legend.position="none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(filename = here("plots", dataset_name, paste0(sim_name, "_closeup_rast_", res, ".pdf")), width = 10, height = 10, dpi = 300)
+}
 
 for (res in res_list) {
   ## rasterize
