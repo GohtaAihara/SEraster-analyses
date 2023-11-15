@@ -387,7 +387,7 @@ for (res in res_list) {
   ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_sym_clustering_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
 }
 
-## Figure (CooccurrenceAffinity heatmap, pyramid)
+## Figure (CooccurrenceAffinity heatmap, pyramid, vertical)
 res <- 100
 alpha <- 0.05
 ## load data
@@ -423,6 +423,44 @@ ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alp
   theme(axis.text.x = element_text(angle = 45, vjust = 0, hjust=0),
         axis.text.y = element_text(angle = 45, vjust = 0, hjust=1))
 ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_sym_clustering_resolution_", res, "_pyramid.pdf")), width = 12, height = 10, dpi = 300)
+
+## Figure (CooccurrenceAffinity heatmap, pyramid, vertical)
+res <- 100
+alpha <- 0.05
+## load data
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+## create symmetric data
+df_flipped <- df[df$celltypeA != df$celltypeB,]
+df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
+df_sym <- rbind(df, df_flipped)
+## use symmetric (redundant) data
+## reset label order
+df_sym <- df_sym %>%
+  mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
+         celltypeB = factor(celltypeB, levels(ct_labels)))
+## reorganize into matrix
+df_heatmap_sym <- cast(df_sym, celltypeA ~ celltypeB, value = "alpha")
+df_heatmap_sym <- df_heatmap_sym[,-1]
+isSymmetric.matrix(as.matrix(df_heatmap_sym))
+## cluster
+hc_sym <- hclust(dist(df_heatmap_sym))
+## reorder labels
+df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym$order])
+df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym$order])
+## plot
+ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+  coord_fixed() +
+  geom_tile(linewidth = 0.5) +
+  scale_x_discrete(position = "bottom") +
+  scale_y_discrete(position = "right") +
+  scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red") +
+  scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
+  labs(x = "Cluster A",
+       y = "Cluster B") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 135, vjust = 0.5, hjust=0.5),
+        axis.text.y = element_text(angle = 135, vjust = 0, hjust=0))
+ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_sym_clustering_resolution_", res, "_pyramid_horizontal.pdf")), width = 12, height = 10, dpi = 300)
 
 ## Figure (visual inspection of spatial niches)
 niches <- list(
