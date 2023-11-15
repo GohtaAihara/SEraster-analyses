@@ -480,7 +480,7 @@ ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_hea
 
 ## Figure (visual inspection of spatial niches)
 niches <- list(
-  factor(c("Fol B cells", "CD4 Memory T cells", "Podoplanin", "indistinct"), levels = levels(ct_labels)),
+  factor(c("Fol B cells", "CD4 Memory T cells", "Podoplanin"), levels = levels(ct_labels)),
   factor(c("Blood endothelial", "Macrophages", "CD8 Memory T cells", "Ki67 proliferating", "Myeloid cells", "B cells, red pulp", "Sinusoidal cells", "Neutrophils/Monocytes"), levels = levels(ct_labels))
 )
 

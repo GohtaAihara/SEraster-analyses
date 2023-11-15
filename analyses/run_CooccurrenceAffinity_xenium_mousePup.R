@@ -315,7 +315,6 @@ ggplot(df_plt, aes(x = resolution, y = prop_localized_pairs)) +
        y = "Proportion of localized pairs") +
   theme_bw()
 
-
 ## Figure (CooccurrenceAffinity heatmap)
 res_list <- list(50, 100, 200, 400)
 for (res in res_list) {
