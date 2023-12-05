@@ -113,6 +113,72 @@ for (res in res_list) {
   saveRDS(affinity_results, file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
 }
 
+## runtime analysis
+n_itr <- 5
+
+runtime_results <- do.call(rbind, lapply(res_list, function(res) {
+  out <- do.call(rbind, lapply(seq(n_itr), function(i) {
+    print(paste0("Resolution: ", res, ", trial: ", i))
+    start1 <- Sys.time()
+    ## rasterize
+    spe_rast <- SEraster::rasterizeCellType(spe, "celltypes", resolution = res, fun = "sum", BPPARAM = BiocParallel::MulticoreParam())
+    runtime_rast <- difftime(Sys.time(), start1, units = "secs")
+    
+    start2 <- Sys.time()
+    ## compute relative enrichment (RE) metric (the output is dense matrix)
+    mat <- assay(spe_rast, "pixelval")
+    mat_re <- do.call(rbind, lapply(rownames(spe_rast), function(ct_label) {
+      ## relative enrichment = celltype observed / celltype expected = celltype observed / (celltype frequency * total # of cells in the pixel)
+      mat[ct_label,] / (sum(mat[ct_label,]) / sum(mat) * colSums(mat))
+    }))
+    rownames(mat_re) <- rownames(mat)
+    
+    ## binarize (1 if RE >= 1, 0 if RE < 1)
+    mat_bin <- ifelse(mat_re >= 1, 1, 0)
+    
+    ## compute affinity MLE using CooccurrenceAffinity (store the log-affinity metric, CI, and pvalue for each pair)
+    ## get pair combinations
+    non_self <- combn(levels(ct_labels), 2, simplify = FALSE)
+    self <- lapply(levels(ct_labels), function(ct_label) c(ct_label, ct_label))
+    pairs <- c(non_self, self)
+    
+    ## multiply pixel values for each pair of cell types
+    affinity_results <- do.call(rbind, lapply(pairs, function(pair) {
+      ## create a 2x2 contingency table of counts
+      cont_tab <- table(factor(mat_bin[pair[1],], levels = c(0,1)), factor(mat_bin[pair[2],], levels = c(0,1)))
+      X <- cont_tab[2,2]
+      mA <- sum(cont_tab[2,])
+      mB <- sum(cont_tab[,2])
+      N <- sum(cont_tab)
+      
+      out <- CooccurrenceAffinity::ML.Alpha(X,c(mA,mB,N), lev = CI_lev, pvalType = pval_method)
+      
+      ## set index for the chosen CI method
+      CI_idx <- CI_method_dict[CI_method][[1]]
+      
+      return(data.frame(
+        pair = paste(pair, collapse = " & "),
+        celltypeA = factor(pair[1], levels = levels(ct_labels)),
+        celltypeB = factor(pair[2], levels = levels(ct_labels)),
+        X = X,
+        mA = mA,
+        mB = mB,
+        N = N,
+        alpha = out$est, ci.min = out[CI_idx][[1]][1], 
+        ci.max = out[CI_idx][[1]][2], 
+        pval = out$pval)
+      )
+    }))
+    end <- Sys.time()
+    runtime_coloc <- difftime(end, start2, units = "secs")
+    runtime_total <- difftime(end, start1, units = "secs")
+    
+    return(data.frame(trial = i, num_pixels = dim(spe_rast)[2], runtime_rast = runtime_rast, runtime_coloc = runtime_coloc, runtime_total = runtime_total))
+
+  }))
+  return(data.frame(dataset = dataset_name, resolution = res, out))
+}))
+saveRDS(runtime_results, file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_runtime.RDS")))
 
 # Plot --------------------------------------------------------------------
 
@@ -511,3 +577,5 @@ for (i in seq_along(niches)) {
     )
   ggsave(filename = here("plots", dataset_name, method, paste0("singlecell_niche_", i, ".pdf")), width = 6, height = 5, dpi = 300)
 }
+
+## runtime
