@@ -1,0 +1,138 @@
+## simulate true positives and negatives
+
+## Trevor's recommendation, simulate two spatially autocorrelated but independent cell-types
+## https://hastie.su.domains/Papers/biodiversity/Biodiversity.pdf
+
+# Set up ------------------------------------------------------------------
+
+setwd("~/Desktop/SEraster")
+devtools::document()
+devtools::load_all()
+
+setwd("~/Desktop/SEraster-analyses/")
+
+source("analyses/functions.R")
+
+library(SpatialExperiment)
+library(Matrix)
+library(ggplot2)
+library(here)
+
+dataset_name <- "autocorrelation_simulations"
+
+# Generate simulated data -------------------------------------------------
+
+## RandomFields not available anymore
+## write own code / copy from their source
+
+# Set parameters
+set.seed(10)
+N <- 2000  # Number of locations
+nugget_variance <- 0.1  # Nugget variance (τ^2)
+range_parameter <- 0.5  # Range parameter (κ)
+smoothness_parameter <- 0.3  # Smoothness parameter (φ)
+
+# Define locations in [0, 1] × [0, 1]
+locations <- cbind(runif(N), runif(N)) 
+colnames(locations) <- c('x', 'y')
+
+# Function to calculate Matern covariance
+matern_covariance <- function(h, range, smoothness) {
+  nu <- smoothness
+  term1 <- 2^(1 - nu)/gamma(nu)
+  term2 <- (sqrt(2 * nu) * h / range)
+  term3 <- besselK(term2, nu)
+  return(term1 * (term2^nu) * term3)
+}
+
+# Function to calculate the covariance matrix
+calculate_covariance_matrix <- function(locations, range, smoothness) {
+  N <- nrow(locations)
+  cov_matrix <- matrix(0, nrow = N, ncol = N)
+  for (i in 1:N) {
+    for (j in 1:N) {
+      h <- sqrt(sum((locations[i,] - locations[j,])^2))
+      cov_matrix[i, j] <- matern_covariance(h, range, smoothness)
+    }
+  }
+  return(cov_matrix)
+}
+
+# Generate covariance matrix for the Gaussian random field
+cov_matrix <- calculate_covariance_matrix(locations, range_parameter, smoothness_parameter)
+diag(cov_matrix) <- 1
+
+# Generate realizations of the Gaussian random field
+W1 <- MASS::mvrnorm(1, rep(0, N), cov_matrix)
+W2 <- MASS::mvrnorm(1, rep(0, N), cov_matrix)
+
+# Generate independent and identically distributed errors
+Z1 <- rnorm(N, mean = 0, sd = sqrt(nugget_variance))
+Z2 <- rnorm(N, mean = 0, sd = sqrt(nugget_variance))
+
+# Generate realizations of the process Xsi
+Xs1 <- W1 + Z1
+Xs2 <- W2 + Z2
+
+# Print or plot the results as needed
+print(Xs1)
+print(Xs2) 
+
+# Set names
+rownames(locations) <- names(Xs1) <- names(Xs2) <- paste0('cell', 1:N)
+
+# Confirm Rob and Trevor's original concerns with pixel data
+plot(Xs1, Xs2)
+cor(Xs1, Xs2) ## indeed not 0
+cor.test(Xs1, Xs2) ## indeed not 0
+
+par(mfrow=c(1,2), mar=rep(2,4))
+MERINGUE::plotEmbedding(locations, col=Xs1, cex=1) ## expression of gene A
+MERINGUE::plotEmbedding(locations, col=Xs2, cex=1)  ## expression of gene B
+
+## format into SpatialExperiment
+spe_gexp <- SpatialExperiment::SpatialExperiment(
+  assays = list(lognorm = rbind(Xs1,Xs2)),
+  spatialCoords = locations
+)
+
+## cell type?
+Ys1 <- round((Xs1 - min(Xs1))*10)
+MERINGUE::plotEmbedding(locations, col=Ys1, cex=1) 
+
+# Run methods -------------------------------------------------------------
+
+## check correlation of each pixel at various resolution
+res_list <- seq(0,1-1e-10,by = 0.01)
+autocorrelation_results <- do.call(rbind, lapply(res_list, function(res) {
+  print(paste0("Resolution = ", res))
+  if (res == 0) {
+    out <- cor.test(assay(spe_gexp)[1,], assay(spe_gexp)[2,])
+  } else {
+    spe_rast <- SEraster::rasterizeGeneExpression(spe_gexp, resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+    out <- cor.test(assay(spe_rast)[1,], assay(spe_rast)[2,])
+  }
+  return(data.frame(
+    resolution = res,
+    cor_estimate = out$estimate,
+    cor_pval = out$p.value,
+    cor_ci_min = out$conf.int[1],
+    cor_ci_max = out$conf.int[2]
+  ))
+}))
+saveRDS(autocorrelation_results, file = here("outputs", paste0(dataset_name, "_gexp.RDS")))
+
+# Plot --------------------------------------------------------------------
+## pixel-wise autocorrelation for gene expression
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_gexp.RDS")))
+
+ggplot(df, aes(x = resolution, y = cor_estimate)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(data = df, aes(ymin = cor_ci_min, ymax = cor_ci_max)) +
+  ylim(c(-1,1)) +
+  labs(x = "Rasterization Resolution",
+       y = "Pearson's correlation") +
+  theme_bw()
+
+##
