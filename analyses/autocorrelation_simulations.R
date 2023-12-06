@@ -18,6 +18,8 @@ library(Matrix)
 library(ggplot2)
 library(here)
 
+par(mfrow=c(1,1))
+
 dataset_name <- "autocorrelation_simulations"
 
 # Generate simulated data -------------------------------------------------
@@ -71,8 +73,9 @@ Z1 <- rnorm(N, mean = 0, sd = sqrt(nugget_variance))
 Z2 <- rnorm(N, mean = 0, sd = sqrt(nugget_variance))
 
 # Generate realizations of the process Xsi
-Xs1 <- W1 + Z1
+Xs1 <- W1 + Z1 
 Xs2 <- W2 + Z2
+Xs3 <- W1 + Z2 # should correlate with Xs1
 
 # Print or plot the results as needed
 print(Xs1)
@@ -85,14 +88,19 @@ rownames(locations) <- names(Xs1) <- names(Xs2) <- paste0('cell', 1:N)
 plot(Xs1, Xs2)
 cor(Xs1, Xs2) ## indeed not 0
 cor.test(Xs1, Xs2) ## indeed not 0
+plot(Xs1, Xs3)
+cor(Xs1, Xs3) ## high
+cor.test(Xs1, Xs3) ## high
 
 par(mfrow=c(1,2), mar=rep(2,4))
 MERINGUE::plotEmbedding(locations, col=Xs1, cex=1) ## expression of gene A
 MERINGUE::plotEmbedding(locations, col=Xs2, cex=1)  ## expression of gene B
 
 ## format into SpatialExperiment
+gexp <- rbind(Xs1,Xs2,Xs3)
+rownames(gexp) <- paste0("gene",1:dim(gexp)[1])
 spe_gexp <- SpatialExperiment::SpatialExperiment(
-  assays = list(lognorm = rbind(Xs1,Xs2)),
+  assays = list(lognorm = gexp),
   spatialCoords = locations
 )
 
@@ -102,31 +110,45 @@ MERINGUE::plotEmbedding(locations, col=Ys1, cex=1)
 
 # Run methods -------------------------------------------------------------
 
-## check correlation of each pixel at various resolution
+## pixel-wise autocorrelation for gene expression
 res_list <- seq(0,1-1e-10,by = 0.01)
 autocorrelation_results <- do.call(rbind, lapply(res_list, function(res) {
   print(paste0("Resolution = ", res))
   if (res == 0) {
-    out <- cor.test(assay(spe_gexp)[1,], assay(spe_gexp)[2,])
+    out_12 <- cor.test(assay(spe_gexp)[1,], assay(spe_gexp)[2,])
+    out_13 <- cor.test(assay(spe_gexp)[1,], assay(spe_gexp)[3,])
   } else {
     spe_rast <- SEraster::rasterizeGeneExpression(spe_gexp, resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
-    out <- cor.test(assay(spe_rast)[1,], assay(spe_rast)[2,])
+    out_12 <- cor.test(assay(spe_rast)[1,], assay(spe_rast)[2,])
+    out_13 <- cor.test(assay(spe_rast)[1,], assay(spe_rast)[3,])
   }
-  return(data.frame(
+  df_12 <- data.frame(
     resolution = res,
-    cor_estimate = out$estimate,
-    cor_pval = out$p.value,
-    cor_ci_min = out$conf.int[1],
-    cor_ci_max = out$conf.int[2]
-  ))
+    condition = "independent",
+    cor_estimate = out_12$estimate,
+    cor_pval = out_12$p.value,
+    cor_ci_min = out_12$conf.int[1],
+    cor_ci_max = out_12$conf.int[2]
+  )
+  df_13 <- data.frame(
+    resolution = res,
+    condition = "correlated",
+    cor_estimate = out_13$estimate,
+    cor_pval = out_13$p.value,
+    cor_ci_min = out_13$conf.int[1],
+    cor_ci_max = out_13$conf.int[2]
+  )
+  return(rbind(df_12,df_13))
 }))
 saveRDS(autocorrelation_results, file = here("outputs", paste0(dataset_name, "_gexp.RDS")))
+
+## cell type colocalization with CooccurrenceAffinity
 
 # Plot --------------------------------------------------------------------
 ## pixel-wise autocorrelation for gene expression
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_gexp.RDS")))
 
-ggplot(df, aes(x = resolution, y = cor_estimate)) +
+ggplot(df, aes(x = resolution, y = cor_estimate, col = condition)) +
   geom_point() +
   geom_line() +
   geom_errorbar(data = df, aes(ymin = cor_ci_min, ymax = cor_ci_max)) +
@@ -134,5 +156,6 @@ ggplot(df, aes(x = resolution, y = cor_estimate)) +
   labs(x = "Rasterization Resolution",
        y = "Pearson's correlation") +
   theme_bw()
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_gexp.pdf")), width = 8, height = 5, dpi = 300)
 
-##
+## cell type colocalization
