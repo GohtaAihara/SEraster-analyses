@@ -1,4 +1,8 @@
-## This file is for loading and preprocessing MERFISH mouse preoptic
+## This file is for loading and preprocessing MERFISH mouse preoptic area dataset
+
+## https://datadryad.org/stash/dataset/doi:10.5061/dryad.8t8s248
+## "Expression values for the 135 genes measured in the combinatorial smFISH run 
+## were determined as the total counts per cell divided by the cell volume and scaled by 1000"
 
 # Set up ------------------------------------------------------------------
 
@@ -13,5 +17,62 @@ library(SpatialExperiment)
 library(Matrix)
 library(ggplot2)
 library(rhdf5)
+library(here)
 
 par(mfrow=c(1,1))
+
+dataset_name <- "merfish_mousePOA"
+
+# Load dataset ------------------------------------------------------------
+
+## use OneDrive directory for now
+data <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/MERFISH_mousePOA/merfish_mousePOA_all_cells.csv')
+
+## subset
+animal <- 1
+sex <- "Female"
+behavior <- "Naive"
+bregma <- "-0.29"
+data_sub <- data[(data$Animal_ID == animal & data$Animal_sex == sex & data$Behavior == behavior & data$Bregma == bregma),]
+dim(data_sub)
+
+## extract features x observations matrix, spatial coordinates, meta data
+## genes x cells matrix
+mat <- as(t(data_sub[,10:ncol(data_sub)]), "CsparseMatrix")
+blanks <- rownames(mat)[grepl("Blank", rownames(mat))]
+mat <- mat[setdiff(rownames(mat),blanks),]
+
+## spatial coordinates
+pos <- data_sub[,c("Centroid_X", "Centroid_Y")]
+colnames(pos) <- c("x","y")
+## make x,y coordinates positive
+pos[,1] <- pos[,1] - min(pos[,1])
+pos[,2] <- pos[,2] - min(pos[,2])
+
+## meta data
+meta <- data_sub[,c("Bregma", "Cell_class", "Neuron_cluster_ID")]
+colnames(meta) <- c("bregma", "celltype", "neurontype")
+
+colnames(mat) <- rownames(pos) <- rownames(meta) <- data_sub$Cell_ID
+
+## filter genes with NaN values
+bad_genes <- names(which(rowSums(is.nan(mat)) > 0))
+mat <- mat[setdiff(rownames(mat),bad_genes),]
+dim(mat)
+
+## filter cells with NaN values
+bad_cells <- names(which(colSums(is.nan(mat)) > 0))
+mat <- mat[,setdiff(colnames(mat),bad_cells)]
+pos <- pos[setdiff(rownames(pos),bad_cells),]
+meat <- meta[setdiff(rownames(pos),bad_cells),]
+
+calculateDensity(mat)
+
+## format into a SpatialExperiment object
+spe <- SpatialExperiment::SpatialExperiment(
+  assays = list(volnorm = mat),
+  spatialCoords = as.matrix(pos),
+  colData = meta
+)
+
+saveRDS(spe, file = here("outputs", paste0(dataset_name, "_preprocessed.RDS")))
