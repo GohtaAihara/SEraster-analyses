@@ -664,7 +664,7 @@ df_perf <- do.call(rbind, lapply(unique(df$resolution), function(res) {
     out <- do.call(rbind, lapply(angle_deg_list, function(deg) {
       rast <- df[df$resolution == res & df$rotation_deg == deg,]
       results_sig <- do.call(rbind, lapply(rast$gene, function(gene) {
-        return(data.frame(gene = gene, pixel = rast[rast$gene == gene, "padj"] <= alpha, singlecell = sc[sc$gene == gene, "padj"] <= alpha))
+        return(data.frame(gene = gene, pred = rast[rast$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
       }))
       out <- calculatePerformanceMetrics(results_sig)
       return(data.frame(rotation_deg = deg, out))
@@ -686,7 +686,12 @@ df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(re
   return(data.frame(resolution = as.numeric(res), out))
 }))
 
-ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
+df_perf2 <- df_perf %>%
+  mutate(resolution = as.numeric(resolution)) %>%
+  select(resolution, TPR, specificity, PPV, F1, ACC) %>%
+  pivot_longer(!resolution, names_to = "metrics", values_to = "values")
+
+plt <- ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
   # geom_jitter(width = 10, alpha = 0.3) +
   geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
   geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
@@ -698,6 +703,7 @@ ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
        y = "Performance",
        col = "Metric") +
   theme_bw()
+plotly::ggplotly(plt)
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary.pdf")), width = 6, heigh = 5, dpi = 300)
 
 ## Figure 1d (nnSVG results comparison)
@@ -820,6 +826,27 @@ ggplot(df, aes(x = -log10(padj.1), y = -log10(padj), col = resolution.1)) +
   facet_wrap(~ resolution.1) +
   theme_bw()
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_adjusted_pval.pdf")), width = 6, heigh = 5, dpi = 300)
+
+## Supplementary Figure 1
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS"))) %>%
+  mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400"))) %>%
+  filter(trial == 1)
+
+col_res <- c("#666666", gg_color_hue(4))
+
+ggplot(df, aes(x = resolution, y = num_points, col = resolution, label = num_points)) +
+  geom_point() +
+  geom_text(vjust = -1, size = 5) +
+  scale_color_manual(values = col_res) +
+  ylim(c(0,9e+4)) +
+  labs(x = "Rasterization Resolution",
+       y = "Number of spatial points",
+       col = "Resolution") +
+  theme_bw() +
+  theme(
+    legend.position="none"
+  )
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_num_points.pdf")), width = 6, heigh = 5, dpi = 300)
 
 # Further exploration -----------------------------------------------------
 

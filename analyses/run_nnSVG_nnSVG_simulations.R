@@ -438,23 +438,23 @@ df_perf_summary2 <- df_perf_summary
 df_perf_summary2$resolution <- sub("singlecell", 0, df_perf_summary2$resolution)
 df_perf_summary2$resolution <- as.numeric(df_perf_summary2$resolution)
 
-ggplot(df_perf_raw, aes(x = resolution, y = values, col = metrics)) +
-  facet_grid(bandwidth ~ expression) +
-  # geom_jitter(width = 10, alpha = 0.3) +
-  # geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
-  geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
-  geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics)) +
-  # scale_x_discrete(breaks = unique(df_perf_raw$resolution)) + 
-  ylim(0,1) +
-  labs(title = "Performance metrics comparison",
-       x = "Resolution",
-       y = "Performance",
-       col = "Metric") +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary.pdf")), width = 8, heigh = 8, dpi = 300)
+# ggplot(df_perf_raw, aes(x = resolution, y = values, col = metrics)) +
+#   facet_grid(bandwidth ~ expression) +
+#   # geom_jitter(width = 10, alpha = 0.3) +
+#   # geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
+#   geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
+#   geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics)) +
+#   # scale_x_discrete(breaks = unique(df_perf_raw$resolution)) + 
+#   ylim(0,1) +
+#   labs(title = "Performance metrics comparison",
+#        x = "Resolution",
+#        y = "Performance",
+#        col = "Metric") +
+#   theme_bw() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary.pdf")), width = 8, heigh = 8, dpi = 300)
 
-ggplot(df_perf_raw, aes(x = resolution, y = values, col = metrics)) +
+plt <- ggplot(df_perf_raw, aes(x = resolution, y = values, col = metrics)) +
   facet_grid(bandwidth ~ expression) +
   # geom_jitter(width = 10, alpha = 0.3) +
   geom_line(data = df_perf_summary2, aes(x = resolution, y = mean, col = metrics)) +
@@ -468,6 +468,7 @@ ggplot(df_perf_raw, aes(x = resolution, y = values, col = metrics)) +
        col = "Metric") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+plotly::ggplotly()
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary_v2.pdf")), width = 12, heigh = 10, dpi = 300)
 
 

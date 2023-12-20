@@ -432,13 +432,33 @@ df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[h
 ## plot
 cutoff <- min(abs(range(df_sym$alpha)))
 lim <- c(-cutoff,cutoff)
+# df_plt <- df_sym %>%
+#   mutate(alpha = Winsorize(alpha, min(lim), max(lim)))
+# ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+#   coord_fixed() +
+#   geom_tile(linewidth = 0.5) +
+#   scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
+#   scale_color_manual(name = paste0("p value ≤ ", alpha), values = c("grey", "black")) +
+#   labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res_interest, ")"),
+#        x = "Cluster A",
+#        y = "Cluster B") +
+#   theme_bw() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
 df_plt <- df_sym %>%
-  mutate(alpha = Winsorize(alpha, min(lim), max(lim)))
-ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+  mutate(
+    alpha = Winsorize(alpha, min(lim), max(lim)),
+    significance = case_when(
+      pval <= 0.001 ~ "***",
+      pval <= 0.01 ~ "**",
+      pval <= 0.05 ~ "*"
+    )
+  )
+ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, label = significance)) +
   coord_fixed() +
   geom_tile(linewidth = 0.5) +
+  geom_text(angle = 45) +
   scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
-  scale_color_manual(name = paste0("p value ≤ ", alpha), values = c("grey", "black")) +
   labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res_interest, ")"),
        x = "Cluster A",
        y = "Cluster B") +
@@ -457,7 +477,6 @@ ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alp
 #   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
 res_list <- list(50, 100, 200, 400)
-res_list_sub <- res_list[res_list != res_interest]
 for (i in seq_along(res_list)) {
   res <- res_list[[i]]
   df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
@@ -486,12 +505,19 @@ for (i in seq_along(res_list)) {
   cutoff <- min(abs(range(df_sym$alpha)))
   lim <- c(-cutoff,cutoff)
   df_plt <- df_sym %>%
-    mutate(alpha = Winsorize(alpha, min(lim), max(lim)))
-  ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+    mutate(
+      alpha = Winsorize(alpha, min(lim), max(lim)),
+      significance = case_when(
+        pval <= 0.001 ~ "***",
+        pval <= 0.01 ~ "**",
+        pval <= 0.05 ~ "*"
+      )
+    )
+  ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, label = significance)) +
     coord_fixed() +
     geom_tile(linewidth = 0.5) +
+    geom_text(size = 10) +
     scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
-    scale_color_manual(name = paste0("p value ≤ ", alpha), values = c("grey", "black")) +
     labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res, ")"),
          x = "Cluster A",
          y = "Cluster B") +
@@ -529,10 +555,18 @@ df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[h
 cutoff <- min(abs(range(df_sym$alpha)))
 lim <- c(-cutoff,cutoff)
 df_plt <- df_sym %>%
-  mutate(alpha = Winsorize(alpha, min(lim), max(lim)))
-ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+  mutate(
+    alpha = Winsorize(alpha, min(lim), max(lim)),
+    significance = case_when(
+      pval <= 0.001 ~ "***",
+      pval <= 0.01 ~ "**",
+      pval <= 0.05 ~ "*"
+    )
+  )
+ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, label = significance)) +
   coord_fixed() +
   geom_tile(linewidth = 0.5) +
+  geom_text(size = 10, angle = 45) +
   scale_x_discrete(position = "top") +
   scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
   scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +

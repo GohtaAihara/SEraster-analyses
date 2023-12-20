@@ -202,7 +202,7 @@ affinity_results <- do.call(rbind, lapply(res_list, function(res) {
 saveRDS(affinity_results, file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_n_rotation_", n_rotation, ".RDS")))
 
 
-# Plots -------------------------------------------------------------------
+ # Plots -------------------------------------------------------------------
 
 col_clu <- gg_color_hue(length(levels(ct_labels)))
 names(col_clu) <- levels(ct_labels)
