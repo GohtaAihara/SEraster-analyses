@@ -304,21 +304,19 @@ for (i in seq_along(res_list)) {
   cutoff <- min(abs(range(df$alpha)))
   lim <- c(-cutoff,cutoff)
   df_plt <- df %>%
-    mutate(alpha = Winsorize(alpha, min(lim), max(lim)))
-  ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+    mutate(
+      alpha = Winsorize(alpha, min(lim), max(lim)),
+      significance = case_when(pval <= 0.05 ~ "*")
+    )
+  ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, label = significance)) +
     coord_fixed() +
-    geom_tile(linewidth = 0.5) +
+    geom_tile(color = "gray") +
+    geom_text(size = 30, vjust = 0.8, hjust = 0.5) +
     # scale_x_discrete(position = "top") +
     scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
-    scale_color_manual(name = paste0("p value ≤ ", alpha), values = c("grey", "black")) +
     labs(x = "Cell type A",
          y = "Cell type B") +
-    theme_bw() +
-    theme(
-      legend.position = "bottom",
-      axis.text.x = element_text(angle = 45, vjust = 0, hjust=0),
-      axis.text.y = element_text(angle = 45, vjust = 0, hjust=1)
-    )
+    theme_bw()
   ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_no_clustering_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
 }
 

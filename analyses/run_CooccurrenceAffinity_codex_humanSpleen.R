@@ -330,201 +330,199 @@ ggsave(plt_comb, filename = here("plots", dataset_name, paste0(dataset_name, "_r
 
 
 ## Figure (CooccurrenceAffinity heatmap)
-res_list <- list(50, 100, 200, 400)
-alpha <- 0.05
-for (res in res_list) {
-  df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
-  ggplot(df, aes(x = celltypeA, y = celltypeB, fill = alpha)) +
-    geom_tile() +
-    scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red") +
-    labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res, ")"),
-         x = "Cluster A",
-         y = "Cluster B") +
-    theme_bw()
-  ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_without_clustering_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
-  
-  ## create symmetric data
-  df_flipped <- df[df$celltypeA != df$celltypeB,]
-  df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
-  df_sym <- rbind(df, df_flipped)
-  
-  ## use non-symmetric (non-redundant) data
-  ## reset label order
-  df_sym <- df_sym %>%
-    mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
-           celltypeB = factor(celltypeB, levels(ct_labels)))
-  ## reorganize into matrix
-  df_heatmap_non_sym <- cast(df, celltypeA ~ celltypeB, value = "alpha")
-  df_heatmap_non_sym <- df_heatmap_non_sym[,-1]
-  rownames(df_heatmap_non_sym) <- colnames(df_heatmap_non_sym)
-  ## cluster
-  hc_non_sym <- hclust(dist(df_heatmap_non_sym))
-  ## reorder labels
-  df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_non_sym)[hc_non_sym$order])
-  df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_non_sym)[hc_non_sym$order])
-  ## plot
-  ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
-    coord_fixed() +
-    geom_tile(linewidth = 0.5) +
-    scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red") +
-    scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
-    labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res, ")"),
-         x = "Cluster A",
-         y = "Cluster B") +
-    theme_bw() +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-  ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_nonsym_clustering_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
-  
-  ## use symmetric (redundant) data
-  ## reset label order
-  df_sym <- df_sym %>%
-    mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
-           celltypeB = factor(celltypeB, levels(ct_labels)))
-  ## reorganize into matrix
-  df_heatmap_sym <- cast(df_sym, celltypeA ~ celltypeB, value = "alpha")
-  df_heatmap_sym <- df_heatmap_sym[,-1]
-  rownames(df_heatmap_sym) <- colnames(df_heatmap_sym)
-  isSymmetric.matrix(as.matrix(df_heatmap_sym))
-  ## cluster
-  hc_sym <- hclust(dist(df_heatmap_sym))
-  ## reorder labels
-  df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym$order])
-  df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym$order])
-  ## plot
-  ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
-    coord_fixed() +
-    geom_tile(linewidth = 0.5) +
-    scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red") +
-    scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
-    labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res, ")"),
-         x = "Cluster A",
-         y = "Cluster B") +
-    theme_bw() +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-  ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_sym_clustering_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
-}
-
-## order based on 1 resolution
-res_interest <- 100
-df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res_interest, ".RDS")))
-df <- df[(df$celltypeA != "indistinct" & df$celltypeB != "indistinct"),]
-
-## create symmetric data
-df_flipped <- df[df$celltypeA != df$celltypeB,]
-df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
-df_sym <- rbind(df, df_flipped)
-
-## use symmetric (redundant) data
-## reset label order
-df_sym <- df_sym %>%
-  mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
-         celltypeB = factor(celltypeB, levels(ct_labels)))
-## reorganize into matrix
-df_heatmap_sym <- cast(df_sym, celltypeA ~ celltypeB, value = "alpha")
-df_heatmap_sym <- df_heatmap_sym[,-1]
-rownames(df_heatmap_sym) <- colnames(df_heatmap_sym)
-isSymmetric.matrix(as.matrix(df_heatmap_sym))
-## cluster
-hc_sym_interest <- hclust(dist(df_heatmap_sym))
-## reorder labels (use hc_sym_interest)
-df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym_interest$order])
-df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym_interest$order])
-## plot
-cutoff <- min(abs(range(df_sym$alpha)))
-lim <- c(-cutoff,cutoff)
+# res_list <- list(50, 100, 200, 400)
+# alpha <- 0.05
+# for (res in res_list) {
+#   df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+#   ggplot(df, aes(x = celltypeA, y = celltypeB, fill = alpha)) +
+#     geom_tile() +
+#     scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red") +
+#     labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res, ")"),
+#          x = "Cluster A",
+#          y = "Cluster B") +
+#     theme_bw()
+#   ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_without_clustering_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
+#   
+#   ## create symmetric data
+#   df_flipped <- df[df$celltypeA != df$celltypeB,]
+#   df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
+#   df_sym <- rbind(df, df_flipped)
+#   
+#   ## use non-symmetric (non-redundant) data
+#   ## reset label order
+#   df_sym <- df_sym %>%
+#     mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
+#            celltypeB = factor(celltypeB, levels(ct_labels)))
+#   ## reorganize into matrix
+#   df_heatmap_non_sym <- cast(df, celltypeA ~ celltypeB, value = "alpha")
+#   df_heatmap_non_sym <- df_heatmap_non_sym[,-1]
+#   rownames(df_heatmap_non_sym) <- colnames(df_heatmap_non_sym)
+#   ## cluster
+#   hc_non_sym <- hclust(dist(df_heatmap_non_sym))
+#   ## reorder labels
+#   df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_non_sym)[hc_non_sym$order])
+#   df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_non_sym)[hc_non_sym$order])
+#   ## plot
+#   ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+#     coord_fixed() +
+#     geom_tile(linewidth = 0.5) +
+#     scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red") +
+#     scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
+#     labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res, ")"),
+#          x = "Cluster A",
+#          y = "Cluster B") +
+#     theme_bw() +
+#     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#   ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_nonsym_clustering_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
+#   
+#   ## use symmetric (redundant) data
+#   ## reset label order
+#   df_sym <- df_sym %>%
+#     mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
+#            celltypeB = factor(celltypeB, levels(ct_labels)))
+#   ## reorganize into matrix
+#   df_heatmap_sym <- cast(df_sym, celltypeA ~ celltypeB, value = "alpha")
+#   df_heatmap_sym <- df_heatmap_sym[,-1]
+#   rownames(df_heatmap_sym) <- colnames(df_heatmap_sym)
+#   isSymmetric.matrix(as.matrix(df_heatmap_sym))
+#   ## cluster
+#   hc_sym <- hclust(dist(df_heatmap_sym))
+#   ## reorder labels
+#   df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym$order])
+#   df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym$order])
+#   ## plot
+#   ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+#     coord_fixed() +
+#     geom_tile(linewidth = 0.5) +
+#     scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red") +
+#     scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
+#     labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res, ")"),
+#          x = "Cluster A",
+#          y = "Cluster B") +
+#     theme_bw() +
+#     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#   ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_sym_clustering_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
+# }
+# 
+# ## order based on 1 resolution
+# res_interest <- 100
+# df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res_interest, ".RDS")))
+# df <- df[(df$celltypeA != "indistinct" & df$celltypeB != "indistinct"),]
+# 
+# ## create symmetric data
+# df_flipped <- df[df$celltypeA != df$celltypeB,]
+# df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
+# df_sym <- rbind(df, df_flipped)
+# 
+# ## use symmetric (redundant) data
+# ## reset label order
+# df_sym <- df_sym %>%
+#   mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
+#          celltypeB = factor(celltypeB, levels(ct_labels)))
+# ## reorganize into matrix
+# df_heatmap_sym <- cast(df_sym, celltypeA ~ celltypeB, value = "alpha")
+# df_heatmap_sym <- df_heatmap_sym[,-1]
+# rownames(df_heatmap_sym) <- colnames(df_heatmap_sym)
+# isSymmetric.matrix(as.matrix(df_heatmap_sym))
+# ## cluster
+# hc_sym_interest <- hclust(dist(df_heatmap_sym))
+# ## reorder labels (use hc_sym_interest)
+# df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym_interest$order])
+# df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym_interest$order])
+# ## plot
+# cutoff <- min(abs(range(df_sym$alpha)))
+# lim <- c(-cutoff,cutoff)
+# # df_plt <- df_sym %>%
+# #   mutate(alpha = Winsorize(alpha, min(lim), max(lim)))
+# # ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+# #   coord_fixed() +
+# #   geom_tile(linewidth = 0.5) +
+# #   scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
+# #   scale_color_manual(name = paste0("p value ≤ ", alpha), values = c("grey", "black")) +
+# #   labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res_interest, ")"),
+# #        x = "Cluster A",
+# #        y = "Cluster B") +
+# #   theme_bw() +
+# #   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# 
 # df_plt <- df_sym %>%
-#   mutate(alpha = Winsorize(alpha, min(lim), max(lim)))
-# ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+#   mutate(
+#     alpha = Winsorize(alpha, min(lim), max(lim)),
+#     significance = case_when(
+#       pval <= 0.05 ~ "*"
+#     )
+#   )
+# ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, label = significance)) +
 #   coord_fixed() +
 #   geom_tile(linewidth = 0.5) +
+#   geom_text(angle = 45) +
 #   scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
-#   scale_color_manual(name = paste0("p value ≤ ", alpha), values = c("grey", "black")) +
 #   labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res_interest, ")"),
 #        x = "Cluster A",
 #        y = "Cluster B") +
 #   theme_bw() +
 #   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-
-df_plt <- df_sym %>%
-  mutate(
-    alpha = Winsorize(alpha, min(lim), max(lim)),
-    significance = case_when(
-      pval <= 0.001 ~ "***",
-      pval <= 0.01 ~ "**",
-      pval <= 0.05 ~ "*"
-    )
-  )
-ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, label = significance)) +
-  coord_fixed() +
-  geom_tile(linewidth = 0.5) +
-  geom_text(angle = 45) +
-  scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
-  labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res_interest, ")"),
-       x = "Cluster A",
-       y = "Cluster B") +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-
-# ggplot(df_plt, aes(x = celltypeA, y = celltypeB, col = alpha, size = sig_lev2)) +
-#   coord_fixed() +
-#   geom_point() +
-#   scale_color_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
-#   # scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
-#   labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res_interest, ")"),
-#        x = "Cluster A",
-#        y = "Cluster B") +
-#   theme_bw() +
-#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-
-res_list <- list(50, 100, 200, 400)
-for (i in seq_along(res_list)) {
-  res <- res_list[[i]]
-  df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
-  df <- df[(df$celltypeA != "indistinct" & df$celltypeB != "indistinct"),]
-  
-  ## create symmetric data
-  df_flipped <- df[df$celltypeA != df$celltypeB,]
-  df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
-  df_sym <- rbind(df, df_flipped)
-  
-  ## use symmetric (redundant) data
-  ## reset label order
-  df_sym <- df_sym %>%
-    mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
-           celltypeB = factor(celltypeB, levels(ct_labels)))
-  ## reorganize into matrix
-  df_heatmap_sym <- cast(df_sym, celltypeA ~ celltypeB, value = "alpha")
-  df_heatmap_sym <- df_heatmap_sym[,-1]
-  rownames(df_heatmap_sym) <- colnames(df_heatmap_sym)
-  isSymmetric.matrix(as.matrix(df_heatmap_sym))
-
-  ## reorder labels (use hc_sym_interest)
-  df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym_interest$order])
-  df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym_interest$order])
-  ## plot
-  cutoff <- min(abs(range(df_sym$alpha)))
-  lim <- c(-cutoff,cutoff)
-  df_plt <- df_sym %>%
-    mutate(
-      alpha = Winsorize(alpha, min(lim), max(lim)),
-      significance = case_when(
-        pval <= 0.001 ~ "***",
-        pval <= 0.01 ~ "**",
-        pval <= 0.05 ~ "*"
-      )
-    )
-  ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, label = significance)) +
-    coord_fixed() +
-    geom_tile(linewidth = 0.5) +
-    geom_text(size = 10) +
-    scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
-    labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res, ")"),
-         x = "Cluster A",
-         y = "Cluster B") +
-    theme_bw() +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-  ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_sym_clustering_order_", res_interest, "_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
-}
+# 
+# # ggplot(df_plt, aes(x = celltypeA, y = celltypeB, col = alpha, size = sig_lev2)) +
+# #   coord_fixed() +
+# #   geom_point() +
+# #   scale_color_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
+# #   # scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
+# #   labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res_interest, ")"),
+# #        x = "Cluster A",
+# #        y = "Cluster B") +
+# #   theme_bw() +
+# #   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# 
+# res_list <- list(50, 100, 200, 400)
+# for (i in seq_along(res_list)) {
+#   res <- res_list[[i]]
+#   df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+#   df <- df[(df$celltypeA != "indistinct" & df$celltypeB != "indistinct"),]
+#   
+#   ## create symmetric data
+#   df_flipped <- df[df$celltypeA != df$celltypeB,]
+#   df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
+#   df_sym <- rbind(df, df_flipped)
+#   
+#   ## use symmetric (redundant) data
+#   ## reset label order
+#   df_sym <- df_sym %>%
+#     mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
+#            celltypeB = factor(celltypeB, levels(ct_labels)))
+#   ## reorganize into matrix
+#   df_heatmap_sym <- cast(df_sym, celltypeA ~ celltypeB, value = "alpha")
+#   df_heatmap_sym <- df_heatmap_sym[,-1]
+#   rownames(df_heatmap_sym) <- colnames(df_heatmap_sym)
+#   isSymmetric.matrix(as.matrix(df_heatmap_sym))
+# 
+#   ## reorder labels (use hc_sym_interest)
+#   df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym_interest$order])
+#   df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym_interest$order])
+#   ## plot
+#   cutoff <- min(abs(range(df_sym$alpha)))
+#   lim <- c(-cutoff,cutoff)
+#   df_plt <- df_sym %>%
+#     mutate(
+#       alpha = Winsorize(alpha, min(lim), max(lim)),
+#       significance = case_when(
+#         pval <= 0.001 ~ "***",
+#         pval <= 0.01 ~ "**",
+#         pval <= 0.05 ~ "*"
+#       )
+#     )
+#   ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, label = significance)) +
+#     coord_fixed() +
+#     geom_tile(linewidth = 0.5) +
+#     geom_text(size = 10) +
+#     scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
+#     labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res, ")"),
+#          x = "Cluster A",
+#          y = "Cluster B") +
+#     theme_bw() +
+#     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#   ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_sym_clustering_order_", res_interest, "_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
+# }
 
 ## Figure 3c (heatmap 100 um)
 res_interest <- 100
@@ -557,19 +555,14 @@ lim <- c(-cutoff,cutoff)
 df_plt <- df_sym %>%
   mutate(
     alpha = Winsorize(alpha, min(lim), max(lim)),
-    significance = case_when(
-      pval <= 0.001 ~ "***",
-      pval <= 0.01 ~ "**",
-      pval <= 0.05 ~ "*"
-    )
+    significance = case_when(pval <= 0.05 ~ "*")
   )
 ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, label = significance)) +
   coord_fixed() +
-  geom_tile(linewidth = 0.5) +
-  geom_text(size = 10, angle = 45) +
+  geom_tile(color = "gray") +
+  geom_text(size = 20, angle = 45) +
   scale_x_discrete(position = "top") +
   scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
-  scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
   labs(x = "Cluster B",
        y = "Cluster A") +
   theme_bw() +

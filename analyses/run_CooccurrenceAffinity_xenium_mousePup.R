@@ -204,44 +204,19 @@ ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_clusters_si
 ## Figure (rasterized spatial visualization)
 res <- 100
 spe_rast <- readRDS(file = here("outputs", paste0(dataset_name, "_rasterized_resolution_", res, "_binarized.RDS")))
-ct_label <- 1
+ct_label <- "1"
 
 df <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], pixelval = assay(spe_rast, "pixelval")[ct_label,], re = assay(spe_rast, "re")[ct_label,], bin = factor(assay(spe_rast, "bin")[ct_label,], levels = c(0,1)))
 
-p1 <- ggplot(df, aes(x = x, y = y, fill = pixelval)) +
-  coord_fixed() +
-  geom_tile() +
-  scale_fill_viridis_c(name = "cells/pixel") +
-  theme_bw() +
-  theme(
-    panel.grid = element_blank(),
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank()
-  )
-p2 <- ggplot(df, aes(x = x, y = y, fill = re)) +
-  coord_fixed() +
-  geom_tile() +
-  scale_fill_viridis_c(name = "RE") +
-  theme_bw() +
-  theme(
-    panel.grid = element_blank(),
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank()
-  )
-p3 <- ggplot(df, aes(x = x, y = y, fill = bin)) +
-  coord_fixed() +
-  geom_tile() +
-  scale_fill_viridis_d(name = "Binarized") +
-  theme_bw() +
-  theme(
-    panel.grid = element_blank(),
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank()
-  )
-plt_comb <- grid.arrange(p1, p2, p3, ncol = 3, top = paste0("Cluster ", ct_label))
+SEraster::plotRaster(spe_rast, assay_name = "pixelval", feature_name = ct_label, name = "cells/pixel", option = "inferno")
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_rasterized_pixelval.pdf")), width = 3, height = 4, dpi = 300)
+
+SEraster::plotRaster(spe_rast, assay_name = "re", feature_name = ct_label, name = "RE", option = "inferno")
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_rasterized_re.pdf")), width = 3, height = 4, dpi = 300)
+
+SEraster::plotRaster(spe_rast, assay_name = "bin", feature_name = ct_label, factor_levels = c(0,1), name = "Binarized", option = "inferno")
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_rasterized_bin.pdf")), width = 3, height = 4, dpi = 300)
+
 ggsave(plt_comb, filename = here("plots", dataset_name, paste0(dataset_name, "_rasterized_data.pdf")), width = 8, height = 3, dpi = 300)
 
  ## Figure (alpha MLE vs. -log10(p value))
@@ -390,7 +365,6 @@ for (res in res_list) {
 
 ## Figure (CooccurrenceAffinity heatmap, pyramid, vertical)
 res <- 100
-alpha <- 0.05
 ## load data
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
 ## create symmetric data
@@ -401,7 +375,8 @@ df_sym <- rbind(df, df_flipped)
 ## reset label order
 df_sym <- df_sym %>%
   mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
-         celltypeB = factor(celltypeB, levels(ct_labels)))
+         celltypeB = factor(celltypeB, levels(ct_labels)),
+         significance = case_when(pval <= 0.05 ~ "*"))
 ## reorganize into matrix
 df_heatmap_sym <- cast(df_sym, celltypeA ~ celltypeB, value = "alpha")
 df_heatmap_sym <- df_heatmap_sym[,-1]
@@ -412,12 +387,13 @@ hc_sym <- hclust(dist(df_heatmap_sym))
 df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym$order])
 df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym$order])
 ## plot
-ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, col = pval <= alpha)) +
+ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, label = significance)) +
   coord_fixed() +
-  geom_tile(linewidth = 0.5) +
+  geom_tile(color = "gray") +
+  # geom_text(size = 5, vjust = 0.8, hjust = 0.5) +
+  geom_text(size = 5, angle = 45) +
   scale_x_discrete(position = "top") +
   scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red") +
-  scale_color_manual(name = paste0("p value <= ", alpha), values = c("grey", "black")) +
   labs(x = "Cluster A",
        y = "Cluster B") +
   theme_bw() +

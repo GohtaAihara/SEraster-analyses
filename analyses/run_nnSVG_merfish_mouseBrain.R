@@ -675,11 +675,11 @@ df_perf <- do.call(rbind, lapply(unique(df$resolution), function(res) {
 
 df_perf_raw <- df_perf %>%
   mutate(resolution = as.numeric(resolution)) %>%
-  select(resolution, rotation_deg, TPR, specificity, PPV, F1, ACC) %>%
+  select(resolution, rotation_deg, TPR, specificity, PPV) %>%
   pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values")
 
 df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
-  out <- do.call(rbind, lapply(c("TPR", "specificity", "PPV", "F1", "ACC"), function(metric) {
+  out <- do.call(rbind, lapply(c("TPR", "specificity", "PPV"), function(metric) {
     temp <- df_perf[df_perf$resolution == res, metric]
     return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
   }))
@@ -688,22 +688,21 @@ df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(re
 
 df_perf2 <- df_perf %>%
   mutate(resolution = as.numeric(resolution)) %>%
-  select(resolution, TPR, specificity, PPV, F1, ACC) %>%
+  select(resolution, TPR, specificity, PPV) %>%
   pivot_longer(!resolution, names_to = "metrics", values_to = "values")
 
-plt <- ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
+ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
   # geom_jitter(width = 10, alpha = 0.3) +
   geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
   geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
   geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics), width = 10) +
   scale_x_continuous(breaks = unique(df_perf2$resolution)) + 
   ylim(0,1) +
-  labs(title = "Performance metrics comparison",
-       x = "Resolution",
+  labs(title = "Performance",
+       x = "Rasterization Resolution",
        y = "Performance",
        col = "Metric") +
   theme_bw()
-plotly::ggplotly(plt)
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary.pdf")), width = 6, heigh = 5, dpi = 300)
 
 ## Figure 1d (nnSVG results comparison)

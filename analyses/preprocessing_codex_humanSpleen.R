@@ -5,17 +5,16 @@
 setwd("~/Desktop/SEraster")
 devtools::load_all()
 
-setwd('~/Desktop/multiscale_celltype_colocalization_analysis/')
-devtools::load_all()
-
 setwd("~/Desktop/SEraster-analyses/")
 
 source("analyses/functions.R")
 
 library(SpatialExperiment)
+library(crawdad)
 library(Matrix)
 library(ggplot2)
 library(stringr)
+library(here)
 
 par(mfrow=c(1,1))
 

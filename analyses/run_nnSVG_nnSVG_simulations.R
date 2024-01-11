@@ -41,27 +41,6 @@ sim_names <- c(
   "sim_smallBandwidth_lowExpr"
 )
 
-# sim_names <- c(
-#   "sim_largeBandwidth_fullExpr",
-#   "sim_largeBandwidth_medExpr"
-# )
-
-## simulations for shuffle based on medium bandwidth, medium expression
-## filenames for saved simulation datasets
-sim_names_shuffle <- c(
-  "sim_shuffle00", 
-  "sim_shuffle01", 
-  "sim_shuffle02", 
-  "sim_shuffle03", 
-  "sim_shuffle04", 
-  "sim_shuffle05", 
-  "sim_shuffle06", 
-  "sim_shuffle07", 
-  "sim_shuffle08", 
-  "sim_shuffle09", 
-  "sim_shuffle10"
-)
-
 ## load each dataset when we analyze
 
 # Run method -------------------------------------------------------------
@@ -263,47 +242,47 @@ ggplot(df, aes(x = x, y = y, col = gene)) +
   )
 ggsave(filename = here("plots", dataset_name, paste0("nnsvg_sim_singlecell.pdf")), width = 12, height = 10, dpi = 300)
 
-## simulations for shuffle based on medium bandwidth, medium expression
-sim_names_shuffle <- c(
-  "sim_shuffle00", 
-  "sim_shuffle01", 
-  "sim_shuffle02", 
-  "sim_shuffle03", 
-  "sim_shuffle04", 
-  "sim_shuffle05", 
-  "sim_shuffle06", 
-  "sim_shuffle07", 
-  "sim_shuffle08", 
-  "sim_shuffle09", 
-  "sim_shuffle10"
-)
-
-df <- do.call(rbind, lapply(sim_names_shuffle, function(i) {
-  ## load dataset
-  spe <- readRDS(file = here(dir, paste0("spe_", i, ".RDS")))
-  svg_example <- which(rowData(spe)$expressed)[1]
-  
-  meta <- as.numeric(gsub("[^0-9]", "", i))
-  
-  return(data.frame(dataset = i, shuffle = paste0(meta*10, "% shuffled"), x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = assay(spe)[svg_example,]))
-}))
-
-df <- df %>%
-  mutate(shuffle = factor(shuffle, levels = paste0(seq(0, 100, by = 10), "% shuffled")))
-
-ggplot(df, aes(x = x, y = y, col = gene)) +
-  facet_wrap(~shuffle) +
-  coord_fixed() +
-  geom_point(size = 0.7) +
-  scale_color_viridis_c(name = "Log-normalized\nexpression") +
-  labs(title = "Simulated dataset (shuffle)",
-       x = "x (um)",
-       y = "y (um)") +
-  theme_bw() +
-  theme(
-    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)
-  )
-ggsave(filename = here("plots", dataset_name, paste0("nnsvg_sim_shuffle_singlecell.pdf")), width = 15, height = 10, dpi = 300)
+# ## simulations for shuffle based on medium bandwidth, medium expression
+# sim_names_shuffle <- c(
+#   "sim_shuffle00", 
+#   "sim_shuffle01", 
+#   "sim_shuffle02", 
+#   "sim_shuffle03", 
+#   "sim_shuffle04", 
+#   "sim_shuffle05", 
+#   "sim_shuffle06", 
+#   "sim_shuffle07", 
+#   "sim_shuffle08", 
+#   "sim_shuffle09", 
+#   "sim_shuffle10"
+# )
+# 
+# df <- do.call(rbind, lapply(sim_names_shuffle, function(i) {
+#   ## load dataset
+#   spe <- readRDS(file = here(dir, paste0("spe_", i, ".RDS")))
+#   svg_example <- which(rowData(spe)$expressed)[1]
+#   
+#   meta <- as.numeric(gsub("[^0-9]", "", i))
+#   
+#   return(data.frame(dataset = i, shuffle = paste0(meta*10, "% shuffled"), x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = assay(spe)[svg_example,]))
+# }))
+# 
+# df <- df %>%
+#   mutate(shuffle = factor(shuffle, levels = paste0(seq(0, 100, by = 10), "% shuffled")))
+# 
+# ggplot(df, aes(x = x, y = y, col = gene)) +
+#   facet_wrap(~shuffle) +
+#   coord_fixed() +
+#   geom_point(size = 0.7) +
+#   scale_color_viridis_c(name = "Log-normalized\nexpression") +
+#   labs(title = "Simulated dataset (shuffle)",
+#        x = "x (um)",
+#        y = "y (um)") +
+#   theme_bw() +
+#   theme(
+#     axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)
+#   )
+# ggsave(filename = here("plots", dataset_name, paste0("nnsvg_sim_shuffle_singlecell.pdf")), width = 15, height = 10, dpi = 300)
 
 ## Figure x (single cell and rasterization visualizations)
 res_list <- c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01)*6000))
@@ -359,35 +338,105 @@ for (i in sim_names) {
 res_list <- c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01)*6000))
 
 ## simulations for various bandwidth and expression
-sim_names <- c(
-  "sim_largeBandwidth_fullExpr",
-  "sim_largeBandwidth_medExpr",
-  "sim_largeBandwidth_lowExpr",
-  "sim_medBandwidth_fullExpr",
-  "sim_medBandwidth_medExpr",
-  "sim_medBandwidth_lowExpr",
-  "sim_smallBandwidth_fullExpr",
-  "sim_smallBandwidth_medExpr",
-  "sim_smallBandwidth_lowExpr"
-)
-
 # sim_names <- c(
 #   "sim_largeBandwidth_fullExpr",
 #   "sim_largeBandwidth_medExpr",
-#   "sim_largeBandwidth_lowExpr"
+#   "sim_largeBandwidth_lowExpr",
+#   "sim_medBandwidth_fullExpr",
+#   "sim_medBandwidth_medExpr",
+#   "sim_medBandwidth_lowExpr",
+#   "sim_smallBandwidth_fullExpr",
+#   "sim_smallBandwidth_medExpr",
+#   "sim_smallBandwidth_lowExpr"
 # )
-i <- sim_names[1]
-n_rotation <- 10
-spe <- readRDS(file = here(dir, paste0("spe_", i, ".RDS")))
-df <- readRDS(file = here("outputs", dataset_name, paste0(i, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
-temp <- df[df$resolution == "0.01" & df$rotation_deg == 36,]
-results_sig <- data.frame(gene = temp$gene, pred = temp$padj <= alpha, obs = rowData(spe)$expressed)
-calculatePerformanceMetrics(results_sig)
+
+# only use fullExpr ones
+sim_names <- c(
+  "sim_largeBandwidth_fullExpr",
+  "sim_medBandwidth_fullExpr",
+  "sim_smallBandwidth_fullExpr"
+)
+# i <- sim_names[1]
+# n_rotation <- 10
+# spe <- readRDS(file = here(dir, paste0("spe_", i, ".RDS")))
+# df <- readRDS(file = here("outputs", dataset_name, paste0(i, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+# temp <- df[df$resolution == "0.01" & df$rotation_deg == 36,]
+# results_sig <- data.frame(gene = temp$gene, pred = temp$padj <= alpha, obs = rowData(spe)$expressed)
+# calculatePerformanceMetrics(results_sig)
 
 # set a threshold p value
 alpha <- 0.05
 n_rotation <- 10
 angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
+
+for (i in sim_names) {
+  ## load original spe to get T/F labels
+  spe <- readRDS(file = here(dir, paste0("spe_", i, ".RDS")))
+  ## load nnSVG results
+  df <- readRDS(file = here("outputs", dataset_name, paste0(i, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+  
+  out <- do.call(rbind, lapply(unique(df$resolution), function(res) {
+    temp <- df[df$resolution == res,]
+    out2 <- do.call(rbind, lapply(unique(temp$rotation_deg), function(deg) {
+      temp2 <- temp[temp$rotation_deg == deg,]
+      results_sig <- data.frame(gene = temp2$gene, pred = temp2$padj <= alpha, obs = rowData(spe)$expressed)
+      perf <- calculatePerformanceMetrics(results_sig)
+      return(data.frame(rotation_deg = deg, perf))
+    }))
+    return(data.frame(resolution = res, out2))
+  }))
+  
+  meta <- unlist(strsplit(gsub("^sim_(.*?)Bandwidth_(.*?)Expr$", "\\1 \\2", i), " "))
+  
+  df_perf <- data.frame(dataset = i, bandwidth = meta[1], expression = meta[2], out)
+  
+  df_perf_raw <- df_perf %>%
+    mutate(resolution = factor(resolution, levels = res_list),
+           bandwidth = factor(bandwidth, levels = c("large", "med", "small")),
+           expression = factor(expression, levels = c("full", "med", "low"))) %>%
+    select(dataset, bandwidth, expression, resolution, rotation_deg, TPR, specificity, PPV) %>%
+    pivot_longer(!c(dataset, bandwidth, expression, resolution, rotation_deg), names_to = "metrics", values_to = "values")
+  
+  df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
+    out <- do.call(rbind, lapply(unique(df_perf$dataset), function(dataset) {
+      out2 <- do.call(rbind, lapply(c("TPR", "specificity", "PPV"), function(metric) {
+        temp <- df_perf[df_perf$dataset == dataset & df_perf$resolution == res, metric]
+        return(data.frame(metrics = metric, mean = mean(temp, na.rm = TRUE), sd = sd(temp, na.rm = TRUE)))
+      }))
+      
+      meta <- unlist(strsplit(gsub("^sim_(.*?)Bandwidth_(.*?)Expr$", "\\1 \\2", dataset), " "))
+      
+      return(data.frame(dataset = dataset, bandwidth = meta[1], expression = meta[2], resolution = factor(res, levels = res_list), out2))
+    }))
+  }))
+  df_perf_summary <- df_perf_summary %>%
+    mutate(resolution = factor(resolution, levels = res_list),
+           bandwidth = factor(bandwidth, levels = c("large", "med", "small")),
+           expression = factor(expression, levels = c("full", "med", "low")))
+  
+  df_perf_summary2 <- df_perf_summary
+  df_perf_summary2$resolution <- sub("singlecell", 0, df_perf_summary2$resolution)
+  df_perf_summary2$resolution <- as.numeric(df_perf_summary2$resolution)
+  
+  df_perf_raw$resolution <- sub("singlecell", 0, df_perf_raw$resolution)
+  df_perf_raw$resolution <- as.numeric(df_perf_raw$resolution)
+  
+  ggplot(df_perf_raw, aes(x = resolution, y = values, col = metrics)) +
+    geom_jitter(width = 12, alpha = 0.5) +
+    geom_line(data = df_perf_summary2, aes(x = resolution, y = mean, col = metrics)) +
+    geom_point(data = df_perf_summary2, aes(x = resolution, y = mean, col = metrics), size = 1) +
+    geom_errorbar(data = df_perf_summary2, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics)) +
+    scale_x_continuous(breaks = unique(df_perf_summary2$resolution)) +
+    ylim(0,1) +
+    labs(title = "Performance metrics comparison",
+         x = "Resolution",
+         y = "Performance",
+         col = "Metric") +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary_", i, ".pdf")), width = 6, heigh = 5, dpi = 300)
+}
+
 df_perf <- do.call(rbind, lapply(sim_names, function(i) {
   ## load original spe to get T/F labels
   spe <- readRDS(file = here(dir, paste0("spe_", i, ".RDS")))
