@@ -46,6 +46,16 @@ sim_names <- c(
 # Run method -------------------------------------------------------------
 
 ## simulations for various bandwidth and expression
+## check dimensions
+for (i in sim_names) {
+  print(paste0("Dataset: ", i))
+  
+  ## load dataset,
+  spe <- readRDS(file = here(dir, paste0("spe_", i, ".RDS")))
+  
+  print(dim(spe))
+}
+
 ## iterate over 1. dataset, 2. resolution, 3. rotation (save everything in one df for each dataset)
 res_list <- c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01)*6000))
 n_rotation <- 10

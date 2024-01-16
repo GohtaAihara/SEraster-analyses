@@ -242,6 +242,18 @@ test <- bench::mark(
   memory = FALSE
 )
 
+## test
+library(pryr)
+
+test <- mem_change(
+  nnSVG::nnSVG(
+    spe,
+    assay_name = "lognorm",
+    n_threads = 1
+  )
+)
+test
+
 # Plot --------------------------------------------------------------------
 
 col_celltype <- gg_color_hue(length(levels(colData(spe)$celltype)))
