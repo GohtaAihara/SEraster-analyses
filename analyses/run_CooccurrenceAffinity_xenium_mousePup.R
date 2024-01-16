@@ -21,7 +21,6 @@ library(tidyr)
 library(tibble)
 library(dplyr)
 library(reshape)
-library(ggstar)
 
 par(mfrow=c(1,1))
 
@@ -367,6 +366,10 @@ for (res in res_list) {
 res <- 100
 ## load data
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+## number of s.s. cooccurrence/separation
+table(df$pval <= 0.05)
+## number of s.s. cooccurrence
+table(df$pval <= 0.05 & df$alpha > 0)
 ## create symmetric data
 df_flipped <- df[df$celltypeA != df$celltypeB,]
 df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]

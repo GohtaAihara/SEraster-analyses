@@ -112,6 +112,7 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
 saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
 
 ## Measure runtime for each resolution
+device <- "macbookpro"
 n_itr <- 5
 
 runtime_results <- do.call(rbind, lapply(res_list, function(res) {
@@ -149,7 +150,7 @@ runtime_results <- do.call(rbind, lapply(res_list, function(res) {
   }))
   return(data.frame(dataset = dataset_name, resolution = res, out))
 }))
-saveRDS(runtime_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
+saveRDS(runtime_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_", device, ".RDS")))
 
 
 ## Measure memory for each resolution (serial computing due to bench package)
@@ -510,7 +511,9 @@ for (res in res_list) {
 
 
 ## Figure 2c (runtime and memory comparison)
-df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
+device <- "macbookpro"
+# df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_", device, ".RDS")))
 df$resolution <- factor(df$resolution, levels = c("singlecell", "50", "100", "200", "400"))
 
 col_res <- c("#666666", gg_color_hue(4))
