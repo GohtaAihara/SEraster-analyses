@@ -115,6 +115,11 @@ saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_globa
 device <- "macbookpro"
 n_itr <- 5
 
+if (device == "macbookpro") {
+  bpparam <- BiocParallel::MulticoreParam(workers = parallel::detectCores(logical = FALSE))
+  bpparam
+}
+
 runtime_results <- do.call(rbind, lapply(res_list, function(res) {
   out <- do.call(rbind, lapply(seq(n_itr), function(i) {
     print(paste0("Resolution: ", res, ", trial: ", i))
@@ -125,13 +130,13 @@ runtime_results <- do.call(rbind, lapply(res_list, function(res) {
       nnSVG::nnSVG(
         spe,
         assay_name = "lognorm",
-        BPPARAM = BiocParallel::MulticoreParam()
+        BPPARAM = bpparam
       )
       runtime <- difftime(Sys.time(), start, units = "secs")
       return(data.frame(trial = i, num_points = num_points, runtime_rast = NA, runtime_nnsvg = runtime, runtime_total = runtime))
     } else {
       start1 <- Sys.time()
-      spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+      spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = bpparam)
       runtime_rast <- difftime(Sys.time(), start1, units = "secs")
       
       num_points = dim(spe_rast)[2]
@@ -140,7 +145,7 @@ runtime_results <- do.call(rbind, lapply(res_list, function(res) {
       nnSVG::nnSVG(
         spe_rast,
         assay_name = "pixelval",
-        BPPARAM = BiocParallel::MulticoreParam()
+        BPPARAM = bpparam
       )
       end <- Sys.time()
       runtime_nnsvg <- difftime(end, start2, units = "secs")
@@ -511,12 +516,30 @@ for (res in res_list) {
 
 
 ## Figure 2c (runtime and memory comparison)
-device <- "macbookpro"
-# df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
-df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_", device, ".RDS")))
+# device <- "macbookpro"
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
+# df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_", device, ".RDS")))
 df$resolution <- factor(df$resolution, levels = c("singlecell", "50", "100", "200", "400"))
 
 col_res <- c("#666666", gg_color_hue(4))
+
+# compute fold change for total time across resolution
+df_summary <- df %>%
+  group_by(resolution) %>%
+  summarize(
+    avg_runtime_rast = mean(runtime_rast, na.rm = TRUE),
+    avg_runtime_nnsvg = mean(runtime_nnsvg, na.rm = TRUE),
+    avg_runtime_total = mean(runtime_total, na.rm = TRUE)
+  )
+singlecell_time <- df_summary %>%
+  filter(resolution == "singlecell") %>%
+  select(avg_runtime_total) %>%
+  unlist()
+df_summary <- df_summary %>%
+  mutate(
+    avg_runtime_total = as.numeric(avg_runtime_total),
+    fold_change = singlecell_time / avg_runtime_total
+  )
 
 # total runtime
 ggplot(df, aes(x = num_points, y = as.numeric(runtime_total), col = resolution)) +
