@@ -19,6 +19,7 @@ library(here)
 library(tidyr)
 library(tibble)
 library(dplyr)
+library(pryr)
 
 par(mfrow=c(1,1))
 
@@ -253,6 +254,110 @@ test <- mem_change(
   )
 )
 test
+
+data("merfish_mousePOA")
+
+start <- Sys.time()
+mem <- mem_change(
+  rast <- SEraster::rasterizeGeneExpression(merfish_mousePOA)
+)
+runtime <- difftime(Sys.time(), start, units = "secs")
+mem
+runtime
+rast
+
+mem_change(
+  nnSVG::nnSVG(
+    merfish_mousePOA,
+    assay_name = "volnorm",
+    n_threads = 1
+  )
+)
+
+library(profvis)
+profvis(
+  nnSVG::nnSVG(
+    merfish_mousePOA,
+    assay_name = "volnorm",
+    n_threads = 1
+  )
+)
+
+setwd("~/Desktop/SEraster")
+source("R/main.R")
+
+profvis(rasterizeGeneExpression(merfish_mousePOA))
+
+resolution = 100
+data <- assay(merfish_mousePOA)
+pos <- spatialCoords(merfish_mousePOA)
+bbox <- sf::st_bbox(c(
+  xmin = floor(min(pos[,1])-resolution/2), 
+  xmax = ceiling(max(pos[,1])+resolution/2), 
+  ymin = floor(min(pos[,2])-resolution/2), 
+  ymax = ceiling(max(pos[,2])+resolution/2)
+))
+
+profvis(rasterizeMatrix(data, pos, bbox))
+
+setwd("~/Desktop/SEraster-analyses/")
+
+## Measure runtime (Sys.time) and memory (pryr::mem_change)
+
+res_list <- list("singlecell", 50, 100, 200, 400)
+
+device <- "MacStudio"
+n_cores <- 1
+
+if (device == "MacStudio") {
+  bpparam <- BiocParallel::MulticoreParam(workers = n_cores)
+  bpparam
+}
+
+n_itr <- 5
+
+resource_results <- do.call(rbind, lapply(res_list, function(res) {
+  out <- do.call(rbind, lapply(seq(n_itr), function(i) {
+    print(paste0("Resolution: ", res, ", trial: ", i))
+    if (res == "singlecell") {
+      num_points = dim(spe)[2]
+      
+      start <- Sys.time()
+      mem <- mem_change(
+        spe <- nnSVG::nnSVG(
+          spe,
+          assay_name = "lognorm",
+          BPPARAM = bpparam
+        )
+      )
+      runtime <- difftime(Sys.time(), start, units = "secs")
+      return(data.frame(trial = i, num_points = num_points, runtime_rast = NA, runtime_nnsvg = runtime, runtime_total = runtime, mem_rast = NA, mem_nnsvg = mem, mem_total = mem))
+    } else {
+      start1 <- Sys.time()
+      mem_rast <- mem_change(
+        spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = bpparam)
+      )
+      runtime_rast <- difftime(Sys.time(), start1, units = "secs")
+      
+      num_points = dim(spe_rast)[2]
+      
+      start2 <- Sys.time()
+      mem_nnsvg <- mem_change(
+        spe_rast <- nnSVG::nnSVG(
+          spe_rast,
+          assay_name = "pixelval",
+          BPPARAM = bpparam
+        )
+      )
+      end <- Sys.time()
+      runtime_nnsvg <- difftime(end, start2, units = "secs")
+      runtime_total <- difftime(end, start1, units = "secs")
+      return(data.frame(trial = i, num_points = num_points, runtime_rast = runtime_rast, runtime_nnsvg = runtime_nnsvg, runtime_total = runtime_total, mem_rast = mem_rast, mem_nnsvg = mem_nnsvg, mem_total = mem_rast + mem_nnsvg))
+    }
+  }))
+  return(data.frame(dataset = dataset_name, resolution = res, out))
+}))
+saveRDS(resource_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_memory_", device, "_n=", n_itr, ".RDS")))
 
 # Plot --------------------------------------------------------------------
 
@@ -528,9 +633,7 @@ for (res in res_list) {
 
 
 ## Figure 2c (runtime and memory comparison)
-# device <- "macbookpro"
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
-# df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_", device, ".RDS")))
 df$resolution <- factor(df$resolution, levels = c("singlecell", "50", "100", "200", "400"))
 
 col_res <- c("#666666", gg_color_hue(4))
@@ -643,7 +746,95 @@ ggplot(df[df$resolution != "singlecell",], aes(x = resolution, y = as.numeric(ru
         legend.position = "none")
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_rast_v2.pdf")), width = 5, heigh = 5, dpi = 300)
 
-## Figure 1c (performance comparison)
+## Figure 2c new (runtime and memory comparison)
+device <- "MacStudio"
+n_itr <- 5
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_memory_", device, "_n=", n_itr, ".RDS")))
+
+col_res <- c("#666666", gg_color_hue(4))
+
+# compute fold change for total time across resolution
+df_summary <- df %>%
+  group_by(resolution) %>%
+  summarize(
+    avg_runtime_rast = mean(runtime_rast, na.rm = TRUE),
+    avg_runtime_nnsvg = mean(runtime_nnsvg, na.rm = TRUE),
+    avg_runtime_total = mean(runtime_total, na.rm = TRUE),
+    avg_mem_rast = mean(mem_rast, na.rm = TRUE),
+    avg_mem_nnsvg = mean(mem_nnsvg, na.rm = TRUE),
+    avg_mem_total = mean(mem_total, na.rm = TRUE)
+  )
+singlecell_time <- df_summary %>%
+  filter(resolution == "singlecell") %>%
+  select(avg_runtime_total) %>%
+  unlist()
+df_summary <- df_summary %>%
+  mutate(
+    avg_runtime_total = as.numeric(avg_runtime_total),
+    fold_change = singlecell_time / avg_runtime_total
+  )
+
+df$resolution <- factor(df$resolution, levels = c("singlecell", 50, 100, 200, 400))
+
+# total runtime
+ggplot(df, aes(x = resolution, y = as.numeric(runtime_total), col = resolution)) +
+  geom_boxplot(lwd = 0.5, outlier.shape = NA) +
+  geom_jitter(width = 0.2, alpha = 0.75) +
+  scale_color_manual(values = col_res) +
+  labs(title = "Total runtime",
+       x = "Resolution",
+       y = "Runtime (secs)",
+       col = "Resolution") +
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), 
+        panel.grid.minor.y = element_blank(),
+        legend.position = "none")
+
+# ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_total_", device, ".pdf")), width = 6, heigh = 5, dpi = 300)
+
+# total memory
+ggplot(df, aes(x = resolution, y = as.numeric(mem_total)*1e-6, col = resolution)) +
+  geom_boxplot(lwd = 0.5, outlier.shape = NA) +
+  geom_jitter(width = 0.2, alpha = 0.75) +
+  scale_color_manual(values = col_res) +
+  labs(title = "Total memory",
+       x = "Resolution",
+       y = "Memory (MB)",
+       col = "Resolution") +
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), 
+        panel.grid.minor.y = element_blank(),
+        legend.position = "none")
+
+# SEraster memory
+ggplot(df, aes(x = resolution, y = as.numeric(mem_rast)*1e-6, col = resolution)) +
+  geom_boxplot(lwd = 0.5, outlier.shape = NA) +
+  geom_jitter(width = 0.2, alpha = 0.75) +
+  scale_color_manual(values = col_res) +
+  labs(title = "SEraster memory",
+       x = "Resolution",
+       y = "Memory (MB)",
+       col = "Resolution") +
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), 
+        panel.grid.minor.y = element_blank(),
+        legend.position = "none")
+
+# nnSVG memory
+ggplot(df, aes(x = resolution, y = as.numeric(mem_nnsvg)*1e-6, col = resolution)) +
+  geom_boxplot(lwd = 0.5, outlier.shape = NA) +
+  geom_jitter(width = 0.2, alpha = 0.75) +
+  scale_color_manual(values = col_res) +
+  labs(title = "nnSVG memory",
+       x = "Resolution",
+       y = "Memory (MB)",
+       col = "Resolution") +
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), 
+        panel.grid.minor.y = element_blank(),
+        legend.position = "none")
+
+## Figure 2d (performance comparison)
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
 # set a threshold p value
 alpha <- 0.05

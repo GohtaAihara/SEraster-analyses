@@ -37,7 +37,7 @@ data_sub <- data[(data$Animal_ID == animal & data$Animal_sex == sex & data$Behav
 dim(data_sub)
 
 ## extract features x observations matrix, spatial coordinates, meta data
-## genes x cells matrix
+## genes x cells matrix ("total counts per cell divided by the cell volume and scaled by 1000")
 mat <- as(t(data_sub[,10:ncol(data_sub)]), "CsparseMatrix")
 blanks <- rownames(mat)[grepl("Blank", rownames(mat))]
 mat <- mat[setdiff(rownames(mat),blanks),]
@@ -64,15 +64,23 @@ dim(mat)
 bad_cells <- names(which(colSums(is.nan(mat)) > 0))
 mat <- mat[,setdiff(colnames(mat),bad_cells)]
 pos <- pos[setdiff(rownames(pos),bad_cells),]
-meat <- meta[setdiff(rownames(pos),bad_cells),]
+meta <- meta[setdiff(rownames(pos),bad_cells),]
 
-calculateDensity(mat)
+## log transformation
+par(mfrow=c(2,1))
+hist(colSums(mat))
+hist(log10(colSums(mat) + 1))
 
-## format into a SpatialExperiment object
+mat_lognorm <- as(log10(mat + 1), "CsparseMatrix")
+
+calculateDensity(mat_lognorm)
+
+# format into SpatialExperiment class -------------------------------------
+
 spe <- SpatialExperiment::SpatialExperiment(
-  assays = list(volnorm = mat),
+  assays = list(volnorm = mat, lognorm = mat_lognorm),
   spatialCoords = as.matrix(pos),
   colData = meta
 )
 
-saveRDS(spe, file = here("outputs", paste0(dataset_name, "_preprocessed.RDS")))
+saveRDS(spe, file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))
