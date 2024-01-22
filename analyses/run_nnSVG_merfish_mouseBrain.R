@@ -771,26 +771,30 @@ singlecell_time <- df_summary %>%
 df_summary <- df_summary %>%
   mutate(
     avg_runtime_total = as.numeric(avg_runtime_total),
-    fold_change = singlecell_time / avg_runtime_total
+    percentage = avg_runtime_total / singlecell_time * 100
   )
 
 df$resolution <- factor(df$resolution, levels = c("singlecell", 50, 100, 200, 400))
 
 # total runtime
-ggplot(df, aes(x = resolution, y = as.numeric(runtime_total), col = resolution)) +
+set.seed(0)
+ggplot(df, aes(x = resolution, y = as.numeric(runtime_total)/60, col = resolution)) +
   geom_boxplot(lwd = 0.5, outlier.shape = NA) +
   geom_jitter(width = 0.2, alpha = 0.75) +
+  geom_hline(yintercept = df_summary[df_summary$resolution == "singlecell",]$avg_runtime_total/60, color = "black", linetype = "dashed") +
+  geom_text(data = df_summary, aes(x = resolution, y = as.numeric(avg_runtime_total)/60, label = paste0(round(percentage, digits = 1), "%")), vjust = -1.5, size = 5) +
   scale_color_manual(values = col_res) +
+  # scale_y_continuous(expand = expansion(mult = 0.1)) +
+  ylim(0,150) +
   labs(title = "Total runtime",
-       x = "Resolution",
-       y = "Runtime (secs)",
+       x = "Rasterization Resolution (µm)",
+       y = "Runtime (minutes)",
        col = "Resolution") +
   theme_bw() +
   theme(panel.grid.minor.x = element_blank(), 
         panel.grid.minor.y = element_blank(),
         legend.position = "none")
-
-# ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_total_", device, ".pdf")), width = 6, heigh = 5, dpi = 300)
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_total_", device, "_n=", n_itr, ".pdf")), width = 4, heigh = 8, dpi = 300)
 
 # total memory
 ggplot(df, aes(x = resolution, y = as.numeric(mem_total)*1e-6, col = resolution)) +

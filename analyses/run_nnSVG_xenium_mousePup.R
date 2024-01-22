@@ -117,6 +117,15 @@ saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_ct_sp
 
 ## Measure runtime for each resolution
 res_list <- list(100)
+
+device <- "MacStudio"
+n_cores <- 1
+
+if (device == "MacStudio") {
+  bpparam <- BiocParallel::MulticoreParam(workers = n_cores)
+  bpparam
+}
+
 n_itr <- 5
 
 runtime_results <- do.call(rbind, lapply(res_list, function(res) {
@@ -143,7 +152,7 @@ runtime_results <- do.call(rbind, lapply(res_list, function(res) {
   }))
   return(data.frame(dataset = dataset_name, resolution = res, out))
 }))
-saveRDS(runtime_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
+saveRDS(runtime_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_", device, "_n=", n_itr, ".RDS")))
 
 ## test single-cell resolution
 system.time({
