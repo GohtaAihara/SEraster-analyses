@@ -51,3 +51,23 @@ CooccurrenceAffinity::plotgg(data = ct_coocc, variable = "alpha_mle", legendlimi
 # visual inspection
 plotRaster(rastCt, assay_name = "bin", feature_name = "Inhibitory", factor_levels = c(0,1), name = "binarized", option = "inferno")
 plotRaster(rastCt, assay_name = "bin", feature_name = "Excitatory", factor_levels = c(0,1), name = "binarized", option = "inferno")
+
+## load example dataset
+data("merfish_mousePOA")
+dim(merfish_mousePOA)
+
+## rasterize gene expression
+rastGexp <- SEraster::rasterizeGeneExpression(merfish_mousePOA, assay_name="volnorm", resolution = 50)
+
+resolution <- 100
+data <- assay(merfish_mousePOA)
+pos <- spatialCoords(merfish_mousePOA)
+bbox <- sf::st_bbox(c(
+  xmin = floor(min(pos[,1])-resolution/2), 
+  xmax = ceiling(max(pos[,1])+resolution/2), 
+  ymin = floor(min(pos[,2])-resolution/2), 
+  ymax = ceiling(max(pos[,2])+resolution/2)
+))
+test <- SEraster::rasterizeMatrix(data, pos, bbox, resolution = resolution)
+data_sub <- data[,1:100]
+test <- SEraster::rasterizeMatrix(data_sub, pos, bbox, resolution = resolution)

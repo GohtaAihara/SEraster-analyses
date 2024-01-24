@@ -938,6 +938,156 @@ ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
   theme_bw()
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary.pdf")), width = 6, heigh = 5, dpi = 300)
 
+# plot TP, FP, TN, FN
+df_perf3 <- df_perf %>%
+  mutate(resolution = as.numeric(resolution)) %>%
+  select(resolution, TP, FP, TN, FN)
+df_perf3$resolution_label <- factor(df_perf3$resolution, levels = c(50, 100, 200, 400))
+
+col_res <- c(gg_color_hue(4))
+
+p1 <- ggplot(df_perf3, aes(x = resolution, y = TP, col = resolution_label)) +
+  geom_boxplot(aes(group = resolution)) +
+  geom_jitter() +
+  scale_x_continuous(breaks = unique(df_perf3$resolution)) + 
+  scale_color_manual(name = "Resolution", values = col_res) +
+  labs(x = "Rasterization Resolution (μm)",
+       y = "TP") +
+  theme_bw() +
+  theme(legend.position = "none")
+p2 <- ggplot(df_perf3, aes(x = resolution, y = FP, col = resolution_label)) +
+  geom_boxplot(aes(group = resolution)) +
+  geom_jitter() +
+  scale_x_continuous(breaks = unique(df_perf3$resolution)) + 
+  scale_color_manual(name = "Resolution", values = col_res) +
+  labs(x = "Rasterization Resolution (μm)",
+       y = "FP") +
+  theme_bw() +
+  theme(legend.position = "none")
+p3 <- ggplot(df_perf3, aes(x = resolution, y = TN, col = resolution_label)) +
+  geom_boxplot(aes(group = resolution)) +
+  geom_jitter() +
+  scale_x_continuous(breaks = unique(df_perf3$resolution)) + 
+  scale_color_manual(name = "Resolution", values = col_res) +
+  labs(x = "Rasterization Resolution (μm)",
+       y = "TN") +
+  theme_bw() +
+  theme(legend.position = "none")
+p4 <- ggplot(df_perf3, aes(x = resolution, y = FN, col = resolution_label)) +
+  geom_boxplot(aes(group = resolution)) +
+  geom_jitter() +
+  scale_x_continuous(breaks = unique(df_perf3$resolution)) + 
+  scale_color_manual(name = "Resolution", values = col_res) +
+  labs(x = "Rasterization Resolution (μm)",
+       y = "FN") +
+  theme_bw() +
+  theme(legend.position = "none")
+grid.arrange(p1, p2, p3, p4, ncol = 2)
+
+# what if we make the number of SVG and non-SVG the same? (balanced dataset)
+svgs <- df[(df$resolution == "singlecell" & df$padj <= 0.05),]$gene # 401
+non_svgs <- df[(df$resolution == "singlecell" & df$padj > 0.05),]$gene # 82
+# randomly select 82 svgs
+set.seed(0)
+idx <- sample(1:length(svgs), length(non_svgs), replace = FALSE)
+genes_selected <- c(svgs[idx], non_svgs)
+# subset data
+df_selected <- df[df$gene %in% genes_selected,]
+# sanity check
+table(df_selected[df_selected$resolution == "singlecell",]$padj <= 0.05)
+# re-run perf analysis and plot
+df_perf <- do.call(rbind, lapply(unique(df_selected$resolution), function(res) {
+  if (res != "singlecell") {
+    sc <- df_selected[df_selected$resolution == "singlecell",]
+    out <- do.call(rbind, lapply(angle_deg_list, function(deg) {
+      rast <- df_selected[df_selected$resolution == res & df_selected$rotation_deg == deg,]
+      results_sig <- do.call(rbind, lapply(rast$gene, function(gene) {
+        return(data.frame(gene = gene, pred = rast[rast$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
+      }))
+      out <- calculatePerformanceMetrics(results_sig)
+      return(data.frame(rotation_deg = deg, out))
+    }))
+    return(data.frame(resolution = res, out))
+  }
+}))
+
+df_perf_raw <- df_perf %>%
+  mutate(resolution = as.numeric(resolution)) %>%
+  select(resolution, rotation_deg, TPR, specificity, PPV) %>%
+  pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values")
+
+df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
+  out <- do.call(rbind, lapply(c("TPR", "specificity", "PPV"), function(metric) {
+    temp <- df_perf[df_perf$resolution == res, metric]
+    return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
+  }))
+  return(data.frame(resolution = as.numeric(res), out))
+}))
+
+df_perf2 <- df_perf %>%
+  mutate(resolution = as.numeric(resolution)) %>%
+  select(resolution, TPR, specificity, PPV) %>%
+  pivot_longer(!resolution, names_to = "metrics", values_to = "values")
+
+ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
+  geom_jitter(width = 10, alpha = 0.3) +
+  geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
+  geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
+  geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics), width = 10) +
+  scale_x_continuous(breaks = unique(df_perf2$resolution)) + 
+  ylim(0,1) +
+  labs(title = "Performance",
+       x = "Rasterization Resolution",
+       y = "Performance",
+       col = "Metric") +
+  theme_bw()
+
+# plot TP, FP, TN, FN
+df_perf3 <- df_perf %>%
+  mutate(resolution = as.numeric(resolution)) %>%
+  select(resolution, TP, FP, TN, FN)
+df_perf3$resolution_label <- factor(df_perf3$resolution, levels = c(50, 100, 200, 400))
+
+col_res <- c(gg_color_hue(4))
+
+p1 <- ggplot(df_perf3, aes(x = resolution, y = TP, col = resolution_label)) +
+  geom_boxplot(aes(group = resolution)) +
+  geom_jitter() +
+  scale_x_continuous(breaks = unique(df_perf3$resolution)) + 
+  scale_color_manual(name = "Resolution", values = col_res) +
+  labs(x = "Rasterization Resolution (μm)",
+       y = "TP") +
+  theme_bw() +
+  theme(legend.position = "none")
+p2 <- ggplot(df_perf3, aes(x = resolution, y = FP, col = resolution_label)) +
+  geom_boxplot(aes(group = resolution)) +
+  geom_jitter() +
+  scale_x_continuous(breaks = unique(df_perf3$resolution)) + 
+  scale_color_manual(name = "Resolution", values = col_res) +
+  labs(x = "Rasterization Resolution (μm)",
+       y = "FP") +
+  theme_bw() +
+  theme(legend.position = "none")
+p3 <- ggplot(df_perf3, aes(x = resolution, y = TN, col = resolution_label)) +
+  geom_boxplot(aes(group = resolution)) +
+  geom_jitter() +
+  scale_x_continuous(breaks = unique(df_perf3$resolution)) + 
+  scale_color_manual(name = "Resolution", values = col_res) +
+  labs(x = "Rasterization Resolution (μm)",
+       y = "TN") +
+  theme_bw() +
+  theme(legend.position = "none")
+p4 <- ggplot(df_perf3, aes(x = resolution, y = FN, col = resolution_label)) +
+  geom_boxplot(aes(group = resolution)) +
+  geom_jitter() +
+  scale_x_continuous(breaks = unique(df_perf3$resolution)) + 
+  scale_color_manual(name = "Resolution", values = col_res) +
+  labs(x = "Rasterization Resolution (μm)",
+       y = "FN") +
+  theme_bw() +
+  theme(legend.position = "none")
+grid.arrange(p1, p2, p3, p4, ncol = 2)
+
 ## Figure 1d (nnSVG results comparison)
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
 df <- df %>%
