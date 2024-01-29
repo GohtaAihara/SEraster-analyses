@@ -132,14 +132,14 @@ runtime_results <- do.call(rbind, lapply(res_list, function(res) {
   out <- do.call(rbind, lapply(seq(n_itr), function(i) {
     print(paste0("Resolution: ", res, ", trial: ", i))
     start1 <- Sys.time()
-    spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+    spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = bpparam)
     runtime_rast <- difftime(Sys.time(), start1, units = "secs")
     
     start2 <- Sys.time()
     spe_rast <- try({nnSVG::nnSVG(
       spe_rast,
       assay_name = "pixelval",
-      BPPARAM = BiocParallel::MulticoreParam()
+      BPPARAM = bpparam
     )})
     end <- Sys.time()
     runtime_nnsvg <- difftime(end, start2, units = "secs")
@@ -939,20 +939,38 @@ ggplot(df_ct_specific, aes(x = x, y = y, fill =　exp)) +
 ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_nnsvg_ct_specific_resolution_", res, "_cluster_", ct_label, "_v2.pdf")), dpi = 300)
 
 ## Figure (run time)
-df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
+# df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
+device <- "MacStudio"
+n_itr <- 5
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_", device, "_n=", n_itr, ".RDS")))
 df_plt <- df %>%
   pivot_longer(!c("dataset", "resolution", "trial", "num_pixels"), names_to = "step", values_to = "time")
+
+# plot
 ggplot(df_plt, aes(x = step, y = time, col = step)) +
   geom_jitter() +
   geom_boxplot() +
   ylim(0,NA) +
   theme_bw()
 
-#summarise
 df_summary <- df %>%
-  pivot_longer(!c("dataset", "resolution", "trial", "num_pixels"), names_to = "step", values_to = "time") %>%
-  group_by(step) %>%
-  summarise(mean = mean(time), sd =)
+  group_by(resolution) %>%
+  summarize(
+    avg_runtime_rast = mean(runtime_rast, na.rm = TRUE),
+    avg_runtime_nnsvg = mean(runtime_nnsvg, na.rm = TRUE),
+    avg_runtime_total = mean(runtime_total, na.rm = TRUE),
+    sd_runtime_rast = sd(runtime_rast, na.rm = TRUE),
+    sd_runtime_nnsvg = sd(runtime_nnsvg, na.rm = TRUE),
+    sd_runtime_total = sd(runtime_total, na.rm = TRUE)
+  )
+df_summary
+
+# # summarise
+# df_summary <- df %>%
+#   pivot_longer(!c("dataset", "resolution", "trial", "num_pixels"), names_to = "step", values_to = "time") %>%
+#   group_by(step) %>%
+#   summarise(mean = mean(time), sd = sd(time))
+
 
 # Further exploration -----------------------------------------------------
 
