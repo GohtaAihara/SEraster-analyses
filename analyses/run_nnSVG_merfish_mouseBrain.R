@@ -984,6 +984,31 @@ p4 <- ggplot(df_perf3, aes(x = resolution, y = FN, col = resolution_label)) +
   theme(legend.position = "none")
 grid.arrange(p1, p2, p3, p4, ncol = 2)
 
+# genes that contribute to the difference
+alpha <- 0.05
+# get svgs, non-svgs
+svgs <- df[(df$resolution == "singlecell" & df$padj <= alpha),]$gene # 401
+non_svgs <- df[(df$resolution == "singlecell" & df$padj > alpha),]$gene # 82
+# label each gene as TP, TN, FP, FN
+df_perf4 <- df %>%
+  mutate(confusion_matrix = case_when(
+    gene %in% svgs & padj <= alpha ~ "TP",
+    gene %in% non_svgs & padj > alpha ~ "TN",
+    gene %in% non_svgs & padj <= alpha ~ "FP",
+    gene %in% svgs & padj > alpha ~ "FN"
+  )) %>%
+  select(resolution, rotation_deg, gene, padj, confusion_matrix)
+# sanity check
+test <- df_perf4[df_perf4$resolution == "singlecell",]
+test_svgs <- test[test$confusion_matrix %in% c("TP", "FN"),]$gene
+length(test_svgs)
+setdiff(test_svgs, svgs)
+test_non_svgs <- test[test$confusion_matrix %in% c("FP", "TN"),]$gene
+length(test_non_svgs)
+setdiff(test_non_svgs, non_svgs)
+# venn diagram
+##WIP
+
 # what if we make the number of SVG and non-SVG the same? (balanced dataset)
 svgs <- df[(df$resolution == "singlecell" & df$padj <= 0.05),]$gene # 401
 non_svgs <- df[(df$resolution == "singlecell" & df$padj > 0.05),]$gene # 82
