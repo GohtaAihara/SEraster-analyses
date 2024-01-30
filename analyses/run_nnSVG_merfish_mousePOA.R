@@ -43,6 +43,8 @@ plot(spatialCoords(spe), pch=".", asp=1)
 res <- 200
 ## SEraster
 spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+# assays(0)
+
 dim(spe_rast)[2] # number of spatial points
 
 ## nnSVG

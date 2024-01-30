@@ -26,7 +26,10 @@ dataset_name <- "merfish_mousePOA"
 # Load dataset ------------------------------------------------------------
 
 ## use OneDrive directory for now
-data <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/MERFISH_mousePOA/merfish_mousePOA_all_cells.csv')
+#data <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/MERFISH_mousePOA/merfish_mousePOA_all_cells.csv')
+
+## mayling's local directory
+data <- read.csv('~/Downloads/lab/data/merfish_mousePOA_all_cells.csv')
 
 ## subset
 animal <- 1
