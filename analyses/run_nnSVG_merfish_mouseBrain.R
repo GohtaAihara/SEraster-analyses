@@ -633,118 +633,118 @@ for (res in res_list) {
 
 
 ## Figure 2c (runtime and memory comparison)
-df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
-df$resolution <- factor(df$resolution, levels = c("singlecell", "50", "100", "200", "400"))
-
-col_res <- c("#666666", gg_color_hue(4))
-
-# compute fold change for total time across resolution
-df_summary <- df %>%
-  group_by(resolution) %>%
-  summarize(
-    avg_runtime_rast = mean(runtime_rast, na.rm = TRUE),
-    avg_runtime_nnsvg = mean(runtime_nnsvg, na.rm = TRUE),
-    avg_runtime_total = mean(runtime_total, na.rm = TRUE)
-  )
-singlecell_time <- df_summary %>%
-  filter(resolution == "singlecell") %>%
-  select(avg_runtime_total) %>%
-  unlist()
-df_summary <- df_summary %>%
-  mutate(
-    avg_runtime_total = as.numeric(avg_runtime_total),
-    fold_change = singlecell_time / avg_runtime_total
-  )
-
-# total runtime
-ggplot(df, aes(x = num_points, y = as.numeric(runtime_total), col = resolution)) +
-  geom_boxplot(width = 6000, lwd = 0.75, outlier.shape = NA) +
-  geom_jitter(width = 1000, size = 1, alpha = 0.75) +
-  scale_x_continuous(breaks = unique(df$num_points)) + 
-  scale_color_manual(values = col_res) +
-  labs(title = "Total runtime",
-       x = "Number of spatial points",
-       y = "Runtime (secs)",
-       col = "Resolution") +
-  theme_bw() +
-  theme(panel.grid.minor.x = element_blank(), 
-        panel.grid.minor.y = element_blank(), 
-        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_total.pdf")), width = 6, heigh = 5, dpi = 300)
-
-ggplot(df, aes(x = resolution, y = as.numeric(runtime_total), col = resolution)) +
-  geom_boxplot(lwd = 0.5, outlier.shape = NA) +
-  geom_jitter(width = 0.2, alpha = 0.75) +
-  scale_color_manual(values = col_res) +
-  labs(title = "Total runtime",
-       x = "Resolution",
-       y = "Runtime (secs)",
-       col = "Resolution") +
-  theme_bw() +
-  theme(panel.grid.minor.x = element_blank(), 
-        panel.grid.minor.y = element_blank(),
-        legend.position = "none")
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_total_v2.pdf")), width = 4, height = 8, dpi = 300)
-
-# nnSVG runtime
-ggplot(df, aes(x = num_points, y = as.numeric(runtime_nnsvg), col = resolution)) +
-  geom_boxplot(width = 6000, lwd = 0.75, outlier.shape = NA) +
-  geom_jitter(width = 1000, size = 1, alpha = 0.75) +
-  scale_x_continuous(breaks = unique(df$num_points)) + 
-  scale_color_manual(values = col_res) +
-  labs(title = "nnSVG runtime",
-       x = "Number of spatial points",
-       y = "Runtime (secs)",
-       col = "Resolution") +
-  theme_bw() +
-  theme(panel.grid.minor.x = element_blank(), 
-        panel.grid.minor.y = element_blank(), 
-        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_nnsvg.pdf")), width = 6, heigh = 5, dpi = 300)
-
-ggplot(df, aes(x = resolution, y = as.numeric(runtime_nnsvg), col = resolution)) +
-  geom_boxplot(lwd = 0.75, outlier.shape = NA) +
-  geom_jitter(width = 0.1, alpha = 0.75) +
-  scale_color_manual(values = col_res) +
-  labs(title = "nnSVG runtime",
-       x = "Resolution",
-       y = "Runtime (secs)",
-       col = "Resolution") +
-  theme_bw() +
-  theme(panel.grid.minor.x = element_blank(), 
-        panel.grid.minor.y = element_blank(),
-        legend.position = "none")
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_nnsvg_v2.pdf")), width = 5, heigh = 5, dpi = 300)
-
-# SEraster runtime
-ggplot(df[df$resolution != "singlecell",], aes(x = num_points, y = as.numeric(runtime_rast), col = resolution)) +
-  geom_boxplot(width = 2000, lwd = 0.75, outlier.shape = NA) +
-  geom_jitter(width = 500, size = 1, alpha = 0.75) +
-  scale_x_continuous(breaks = unique(df$num_points)) + 
-  scale_color_manual(values = col_res) +
-  labs(title = "SEraster runtime",
-       x = "Number of spatial points",
-       y = "Runtime (secs)",
-       col = "Resolution") +
-  theme_bw() +
-  theme(panel.grid.minor.x = element_blank(), 
-        panel.grid.minor.y = element_blank(), 
-        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_rast.pdf")), width = 6, heigh = 5, dpi = 300)
-
-ggplot(df[df$resolution != "singlecell",], aes(x = resolution, y = as.numeric(runtime_rast), col = resolution)) +
-  geom_boxplot(lwd = 0.75, outlier.shape = NA) +
-  geom_jitter(width = 0.1, alpha = 0.75) +
-  scale_color_manual(values = col_res) +
-  labs(title = "SEraster runtime",
-       x = "Resolution",
-       y = "Runtime (secs)",
-       col = "Resolution") +
-  theme_bw() +
-  theme(panel.grid.minor.x = element_blank(), 
-        panel.grid.minor.y = element_blank(),
-        legend.position = "none")
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_rast_v2.pdf")), width = 5, heigh = 5, dpi = 300)
+# df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
+# df$resolution <- factor(df$resolution, levels = c("singlecell", "50", "100", "200", "400"))
+# 
+# col_res <- c("#666666", gg_color_hue(4))
+# 
+# # compute fold change for total time across resolution
+# df_summary <- df %>%
+#   group_by(resolution) %>%
+#   summarize(
+#     avg_runtime_rast = mean(runtime_rast, na.rm = TRUE),
+#     avg_runtime_nnsvg = mean(runtime_nnsvg, na.rm = TRUE),
+#     avg_runtime_total = mean(runtime_total, na.rm = TRUE)
+#   )
+# singlecell_time <- df_summary %>%
+#   filter(resolution == "singlecell") %>%
+#   select(avg_runtime_total) %>%
+#   unlist()
+# df_summary <- df_summary %>%
+#   mutate(
+#     avg_runtime_total = as.numeric(avg_runtime_total),
+#     fold_change = singlecell_time / avg_runtime_total
+#   )
+# 
+# # total runtime
+# ggplot(df, aes(x = num_points, y = as.numeric(runtime_total), col = resolution)) +
+#   geom_boxplot(width = 6000, lwd = 0.75, outlier.shape = NA) +
+#   geom_jitter(width = 1000, size = 1, alpha = 0.75) +
+#   scale_x_continuous(breaks = unique(df$num_points)) + 
+#   scale_color_manual(values = col_res) +
+#   labs(title = "Total runtime",
+#        x = "Number of spatial points",
+#        y = "Runtime (secs)",
+#        col = "Resolution") +
+#   theme_bw() +
+#   theme(panel.grid.minor.x = element_blank(), 
+#         panel.grid.minor.y = element_blank(), 
+#         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+# ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_total.pdf")), width = 6, heigh = 5, dpi = 300)
+# 
+# ggplot(df, aes(x = resolution, y = as.numeric(runtime_total), col = resolution)) +
+#   geom_boxplot(lwd = 0.5, outlier.shape = NA) +
+#   geom_jitter(width = 0.2, alpha = 0.75) +
+#   scale_color_manual(values = col_res) +
+#   labs(title = "Total runtime",
+#        x = "Resolution",
+#        y = "Runtime (secs)",
+#        col = "Resolution") +
+#   theme_bw() +
+#   theme(panel.grid.minor.x = element_blank(), 
+#         panel.grid.minor.y = element_blank(),
+#         legend.position = "none")
+# ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_total_v2.pdf")), width = 4, height = 8, dpi = 300)
+# 
+# # nnSVG runtime
+# ggplot(df, aes(x = num_points, y = as.numeric(runtime_nnsvg), col = resolution)) +
+#   geom_boxplot(width = 6000, lwd = 0.75, outlier.shape = NA) +
+#   geom_jitter(width = 1000, size = 1, alpha = 0.75) +
+#   scale_x_continuous(breaks = unique(df$num_points)) + 
+#   scale_color_manual(values = col_res) +
+#   labs(title = "nnSVG runtime",
+#        x = "Number of spatial points",
+#        y = "Runtime (secs)",
+#        col = "Resolution") +
+#   theme_bw() +
+#   theme(panel.grid.minor.x = element_blank(), 
+#         panel.grid.minor.y = element_blank(), 
+#         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+# ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_nnsvg.pdf")), width = 6, heigh = 5, dpi = 300)
+# 
+# ggplot(df, aes(x = resolution, y = as.numeric(runtime_nnsvg), col = resolution)) +
+#   geom_boxplot(lwd = 0.75, outlier.shape = NA) +
+#   geom_jitter(width = 0.1, alpha = 0.75) +
+#   scale_color_manual(values = col_res) +
+#   labs(title = "nnSVG runtime",
+#        x = "Resolution",
+#        y = "Runtime (secs)",
+#        col = "Resolution") +
+#   theme_bw() +
+#   theme(panel.grid.minor.x = element_blank(), 
+#         panel.grid.minor.y = element_blank(),
+#         legend.position = "none")
+# ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_nnsvg_v2.pdf")), width = 5, heigh = 5, dpi = 300)
+# 
+# # SEraster runtime
+# ggplot(df[df$resolution != "singlecell",], aes(x = num_points, y = as.numeric(runtime_rast), col = resolution)) +
+#   geom_boxplot(width = 2000, lwd = 0.75, outlier.shape = NA) +
+#   geom_jitter(width = 500, size = 1, alpha = 0.75) +
+#   scale_x_continuous(breaks = unique(df$num_points)) + 
+#   scale_color_manual(values = col_res) +
+#   labs(title = "SEraster runtime",
+#        x = "Number of spatial points",
+#        y = "Runtime (secs)",
+#        col = "Resolution") +
+#   theme_bw() +
+#   theme(panel.grid.minor.x = element_blank(), 
+#         panel.grid.minor.y = element_blank(), 
+#         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+# ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_rast.pdf")), width = 6, heigh = 5, dpi = 300)
+# 
+# ggplot(df[df$resolution != "singlecell",], aes(x = resolution, y = as.numeric(runtime_rast), col = resolution)) +
+#   geom_boxplot(lwd = 0.75, outlier.shape = NA) +
+#   geom_jitter(width = 0.1, alpha = 0.75) +
+#   scale_color_manual(values = col_res) +
+#   labs(title = "SEraster runtime",
+#        x = "Resolution",
+#        y = "Runtime (secs)",
+#        col = "Resolution") +
+#   theme_bw() +
+#   theme(panel.grid.minor.x = element_blank(), 
+#         panel.grid.minor.y = element_blank(),
+#         legend.position = "none")
+# ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_rast_v2.pdf")), width = 5, heigh = 5, dpi = 300)
 
 ## Figure 2c new (runtime and memory comparison)
 device <- "MacStudio"
@@ -779,8 +779,8 @@ df$resolution <- factor(df$resolution, levels = c("singlecell", 50, 100, 200, 40
 # total runtime
 set.seed(0)
 ggplot(df, aes(x = resolution, y = as.numeric(runtime_total)/60, col = resolution)) +
-  geom_boxplot(lwd = 0.5, outlier.shape = NA) +
-  geom_jitter(width = 0.2, alpha = 0.75) +
+  geom_boxplot(lwd = 0.5, outlier.shape = NA, linewidth = 1) +
+  geom_jitter(width = 0.3, alpha = 0.75, size = 2.5, stroke = 0) +
   geom_hline(yintercept = df_summary[df_summary$resolution == "singlecell",]$avg_runtime_total/60, color = "black", linetype = "dashed") +
   geom_text(data = df_summary, aes(x = resolution, y = as.numeric(avg_runtime_total)/60, label = paste0(round(percentage, digits = 1), "%")), vjust = -1.5, size = 5) +
   scale_color_manual(values = col_res) +
@@ -870,7 +870,7 @@ ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric
 
 df_perf2 <- df_perf %>%
   mutate(resolution = as.numeric(resolution)) %>%
-  select(resolution, TPR, specificity, PPV, F1, ACC) %>%
+  select(resolution, TPR, TNR, PPV, F1, ACC) %>%
   pivot_longer(!resolution, names_to = "metrics", values_to = "values")
 
 ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
@@ -908,11 +908,11 @@ df_perf <- do.call(rbind, lapply(unique(df$resolution), function(res) {
 
 df_perf_raw <- df_perf %>%
   mutate(resolution = as.numeric(resolution)) %>%
-  select(resolution, rotation_deg, TPR, specificity, PPV) %>%
+  select(resolution, rotation_deg, TPR, TNR, PPV) %>%
   pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values")
 
 df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
-  out <- do.call(rbind, lapply(c("TPR", "specificity", "PPV"), function(metric) {
+  out <- do.call(rbind, lapply(c("TPR", "TNR", "PPV"), function(metric) {
     temp <- df_perf[df_perf$resolution == res, metric]
     return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
   }))
@@ -921,11 +921,12 @@ df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(re
 
 df_perf2 <- df_perf %>%
   mutate(resolution = as.numeric(resolution)) %>%
-  select(resolution, TPR, specificity, PPV) %>%
+  select(resolution, TPR, TNR, PPV) %>%
   pivot_longer(!resolution, names_to = "metrics", values_to = "values")
 
+set.seed(0)
 ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
-  # geom_jitter(width = 10, alpha = 0.3) +
+  geom_jitter(width = 10, alpha = 0.3, size = 2, stroke = 0) +
   geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
   geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
   geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics), width = 10) +
@@ -1038,11 +1039,11 @@ df_perf <- do.call(rbind, lapply(unique(df_selected$resolution), function(res) {
 
 df_perf_raw <- df_perf %>%
   mutate(resolution = as.numeric(resolution)) %>%
-  select(resolution, rotation_deg, TPR, specificity, PPV) %>%
+  select(resolution, rotation_deg, TPR, TNR, PPV) %>%
   pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values")
 
 df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
-  out <- do.call(rbind, lapply(c("TPR", "specificity", "PPV"), function(metric) {
+  out <- do.call(rbind, lapply(c("TPR", "TNR", "PPV"), function(metric) {
     temp <- df_perf[df_perf$resolution == res, metric]
     return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
   }))
@@ -1051,7 +1052,7 @@ df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(re
 
 df_perf2 <- df_perf %>%
   mutate(resolution = as.numeric(resolution)) %>%
-  select(resolution, TPR, specificity, PPV) %>%
+  select(resolution, TPR, TNR, PPV) %>%
   pivot_longer(!resolution, names_to = "metrics", values_to = "values")
 
 ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +

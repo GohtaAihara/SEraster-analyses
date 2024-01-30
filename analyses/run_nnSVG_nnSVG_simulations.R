@@ -404,12 +404,12 @@ for (i in sim_names) {
     mutate(resolution = factor(resolution, levels = res_list),
            bandwidth = factor(bandwidth, levels = c("large", "med", "small")),
            expression = factor(expression, levels = c("full", "med", "low"))) %>%
-    select(dataset, bandwidth, expression, resolution, rotation_deg, TPR, specificity, PPV) %>%
+    select(dataset, bandwidth, expression, resolution, rotation_deg, TPR, TNR, PPV) %>%
     pivot_longer(!c(dataset, bandwidth, expression, resolution, rotation_deg), names_to = "metrics", values_to = "values")
   
   df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
     out <- do.call(rbind, lapply(unique(df_perf$dataset), function(dataset) {
-      out2 <- do.call(rbind, lapply(c("TPR", "specificity", "PPV"), function(metric) {
+      out2 <- do.call(rbind, lapply(c("TPR", "TNR", "PPV"), function(metric) {
         temp <- df_perf[df_perf$dataset == dataset & df_perf$resolution == res, metric]
         return(data.frame(metrics = metric, mean = mean(temp, na.rm = TRUE), sd = sd(temp, na.rm = TRUE)))
       }))
@@ -431,8 +431,9 @@ for (i in sim_names) {
   df_perf_raw$resolution <- sub("singlecell", 0, df_perf_raw$resolution)
   df_perf_raw$resolution <- as.numeric(df_perf_raw$resolution)
   
+  set.seed(0)
   ggplot(df_perf_raw, aes(x = resolution, y = values, col = metrics)) +
-    geom_jitter(width = 12, alpha = 0.5) +
+    geom_jitter(width = 12, alpha = 0.3, size = 2, stroke = 0) +
     geom_line(data = df_perf_summary2, aes(x = resolution, y = mean, col = metrics)) +
     geom_point(data = df_perf_summary2, aes(x = resolution, y = mean, col = metrics), size = 1) +
     geom_errorbar(data = df_perf_summary2, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics)) +
@@ -473,12 +474,12 @@ df_perf_raw <- df_perf %>%
   mutate(resolution = factor(resolution, levels = res_list),
          bandwidth = factor(bandwidth, levels = c("large", "med", "small")),
          expression = factor(expression, levels = c("full", "med", "low"))) %>%
-  select(dataset, bandwidth, expression, resolution, rotation_deg, TPR, specificity, PPV, F1, ACC) %>%
+  select(dataset, bandwidth, expression, resolution, rotation_deg, TPR, TNR, PPV, F1, ACC) %>%
   pivot_longer(!c(dataset, bandwidth, expression, resolution, rotation_deg), names_to = "metrics", values_to = "values")
 
 df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
   out <- do.call(rbind, lapply(unique(df_perf$dataset), function(dataset) {
-    out2 <- do.call(rbind, lapply(c("TPR", "specificity", "PPV", "F1", "ACC"), function(metric) {
+    out2 <- do.call(rbind, lapply(c("TPR", "TNR", "PPV", "F1", "ACC"), function(metric) {
       temp <- df_perf[df_perf$dataset == dataset & df_perf$resolution == res, metric]
       return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
     }))
@@ -576,12 +577,12 @@ ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric
 #   mutate(resolution = factor(resolution, levels = res_list),
 #          shuffle_label = factor(shuffle_label, levels = paste0(seq(0, 100, by = 10), "% shuffled")),
 #          shuffle_num = factor(shuffle_num, levels = seq(0, 100, by = 10))) %>%
-#   select(dataset, shuffle_label, shuffle_num, resolution, rotation_deg, TPR, specificity, PPV, F1, ACC) %>%
+#   select(dataset, shuffle_label, shuffle_num, resolution, rotation_deg, TPR, TNR, PPV, F1, ACC) %>%
 #   pivot_longer(!c(dataset, shuffle_label, shuffle_num, resolution, rotation_deg), names_to = "metrics", values_to = "values")
 # 
 # df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
 #   out <- do.call(rbind, lapply(unique(df_perf$dataset), function(dataset) {
-#     out2 <- do.call(rbind, lapply(c("TPR", "specificity", "PPV", "F1", "ACC"), function(metric) {
+#     out2 <- do.call(rbind, lapply(c("TPR", "TNR", "PPV", "F1", "ACC"), function(metric) {
 #       temp <- df_perf[df_perf$dataset == dataset & df_perf$resolution == res, metric]
 #       return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
 #     }))

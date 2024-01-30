@@ -964,13 +964,9 @@ df_summary <- df %>%
     sd_runtime_total = sd(runtime_total, na.rm = TRUE)
   )
 df_summary
-
-# # summarise
-# df_summary <- df %>%
-#   pivot_longer(!c("dataset", "resolution", "trial", "num_pixels"), names_to = "step", values_to = "time") %>%
-#   group_by(step) %>%
-#   summarise(mean = mean(time), sd = sd(time))
-
+# in minutes
+as.numeric(df_summary$avg_runtime_total)/60
+as.numeric(df_summary$sd_runtime_total)/60
 
 # Further exploration -----------------------------------------------------
 
