@@ -19,8 +19,21 @@ dir_plt <- here(file.path("plots", "SEraster_github"))
 data("merfish_mousePOA")
 dim(merfish_mousePOA)
 
+## visualize at single-cell resolution
+## cell-type
+df <- data.frame(spatialCoords(merfish_mousePOA), celltype = colData(merfish_mousePOA)$celltype, neurontype = colData(merfish_mousePOA)$neurontype)
+ggplot(df, aes(x = x, y = y, col = celltype)) +
+  geom_point(size = 1) +
+  labs(x = "x (μm)",
+       y = "y (μm)",
+       col = "Cell-types") +
+  theme_bw() +
+  theme(panel.grid = ggplot2::element_blank())
+ggsave(filename = here(dir_plt, "singlecell_celltypes.png"), dpi = 300)
+
 ## rasterize gene expression
 rastGexp <- SEraster::rasterizeGeneExpression(merfish_mousePOA, assay_name="volnorm", resolution = 50)
+dim(rastGexp)
 
 # plot total rasterized gene expression
 SEraster::plotRaster(rastGexp, name = "Total rasterized gene expression")
@@ -32,6 +45,7 @@ ggsave(filename = here(dir_plt, "rasterized_gexp_esr1.png"), dpi = 300)
 
 ## rasterize cell-type labels
 rastCt <- SEraster::rasterizeCellType(merfish_mousePOA, col_name = "celltype", resolution = 50)
+dim(rastCt)
 
 # plot total cell counts
 SEraster::plotRaster(rastCt, name = "cell counts", option = "inferno")
