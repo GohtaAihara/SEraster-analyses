@@ -3,6 +3,7 @@
 # Set up ------------------------------------------------------------------
 
 setwd("~/Desktop/SEraster")
+devtools::document()
 devtools::load_all()
 
 setwd("~/Desktop/SEraster-analyses/")
@@ -20,6 +21,7 @@ library(tidyr)
 library(tibble)
 library(dplyr)
 library(pryr)
+library(R.utils)
 
 par(mfrow=c(1,1))
 
@@ -35,6 +37,7 @@ plot(spatialCoords(spe), pch=".", asp=1)
 # Run method --------------------------------------------------------------
 
 res_list <- list("singlecell", 50, 100, 200, 400)
+res_list
 # res_list <- list(50, 100, 200, 400)
 
 ## Run nnSVG once for each resolution
@@ -68,13 +71,20 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
 saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
 
 ## Rotate dataset, rasterize, run nnSVG for each resolution
+start_res <- 50
+end_res <- 400
+interval_res <- 10
+res_list <- c("singlecell", as.list(seq(start_res, end_res, by = interval_res)))
+# res_list <- c(as.list(seq(start_res, end_res, by = interval_res)))
+res_list
+
 n_rotation <- 10
 angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
+# angle_deg_list <- c(216, 252, 288, 324)
 
 nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
   print(paste0("Resolution: ", res))
   if (res == "singlecell") {
-    num_points = dim(spe)[2]
     
     ## nnSVG
     spe <- nnSVG::nnSVG(
@@ -83,7 +93,7 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
       BPPARAM = BiocParallel::MulticoreParam()
     )
     df <- rownames_to_column(as.data.frame(rowData(spe)), var = "gene")
-    df <- cbind(rotation_deg = NA, num_points = num_points, df)
+    df <- cbind(rotation_deg = NA, num_points = dim(spe)[2], df)
   } else {
     df <- do.call(rbind, lapply(angle_deg_list, function(deg) {
       print(paste0("Rotation (degrees): ", deg))
@@ -95,22 +105,53 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
       
       ## rasterization
       spe_rast <- SEraster::rasterizeGeneExpression(spe_rotated, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
-      num_points = dim(spe_rast)[2]
       
       ## nnSVG
-      spe_rast <- nnSVG::nnSVG(
-        spe_rast,
-        assay_name = "pixelval",
-        BPPARAM = BiocParallel::MulticoreParam()
-      )
-      temp <- rownames_to_column(as.data.frame(rowData(spe_rast)), var = "gene")
-      temp <- cbind(rotation_deg = deg, num_points = num_points, temp)
-      return(temp)
+      ## using try() to handle error and withTimeout() to handle > 30 mins runtime
+      # spe_rast <- try({
+      #   withTimeout(
+      #     {
+      #       nnSVG::nnSVG(
+      #         spe_rast,
+      #         assay_name = "pixelval",
+      #         BPPARAM = BiocParallel::MulticoreParam()
+      #       )
+      #     },
+      #     timeout = 1800,
+      #     onTimeout = c("error")
+      #   )
+      # })
+      
+      ## using try() to handle error
+      spe_rast <- try({
+        nnSVG::nnSVG(
+          spe_rast,
+          assay_name = "pixelval",
+          BPPARAM = BiocParallel::MulticoreParam()
+        )
+      })
+      
+      # spe_rast <- nnSVG::nnSVG(
+      #   spe_rast,
+      #   assay_name = "pixelval",
+      #   BPPARAM = BiocParallel::MulticoreParam()
+      # )
+      
+      if (class(spe_rast) == "try-error") {
+        ## do not save anything for clusters that caused error in nnSVG
+        return(NULL)
+        
+      } else {
+        temp <- rownames_to_column(as.data.frame(rowData(spe_rast)), var = "gene")
+        temp <- cbind(rotation_deg = deg, num_points = dim(spe_rast)[2], temp)
+        return(temp)
+      }
     }))
   }
   return(data.frame(dataset = dataset_name, resolution = res, df))
 }))
-saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+# saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, "_", start_res, "-", end_res, "-by-", interval_res, ".RDS")))
 
 ## Measure runtime for each resolution
 device <- "macbookpro"

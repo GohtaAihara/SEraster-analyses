@@ -18,6 +18,7 @@ dir_plt <- here(file.path("plots", "SEraster_github"))
 ## load example dataset
 data("merfish_mousePOA")
 dim(merfish_mousePOA)
+length(unique(colData(merfish_mousePOA)$celltype))
 
 ## visualize at single-cell resolution
 ## cell-type
@@ -28,7 +29,7 @@ ggplot(df, aes(x = x, y = y, col = celltype)) +
        y = "y (μm)",
        col = "Cell-types") +
   theme_bw() +
-  theme(panel.grid = ggplot2::element_blank())
+  theme(panel.grid = element_blank())
 ggsave(filename = here(dir_plt, "singlecell_celltypes.png"), dpi = 300)
 
 ## rasterize gene expression
