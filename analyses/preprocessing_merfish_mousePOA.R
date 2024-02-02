@@ -36,58 +36,74 @@ conditions <- paste0(data$Animal_ID, "_", data$Animal_sex, "_", data$Behavior, "
 unique(conditions)
 
 ## subset
-animal <- 1
-sex <- "Female"
+animal <- 10
+sex <- "Male"
 behavior <- "Naive"
-bregma <- "-0.29"
+bregma <- "-0.24"
 data_sub <- data[(data$Animal_ID == animal & data$Animal_sex == sex & data$Behavior == behavior & data$Bregma == bregma),]
 dim(data_sub)
 
-## extract features x observations matrix, spatial coordinates, meta data
-## genes x cells matrix ("total counts per cell divided by the cell volume and scaled by 1000")
-mat <- as(t(data_sub[,10:ncol(data_sub)]), "CsparseMatrix")
-blanks <- rownames(mat)[grepl("Blank", rownames(mat))]
-mat <- mat[setdiff(rownames(mat),blanks),]
+animals <- seq(1, 11, by = 1)
+sexes <- c("Female", "Male")
+bregmas <- seq(-0.29, 0.26, by = 0.05)
 
-## spatial coordinates
-pos <- data_sub[,c("Centroid_X", "Centroid_Y")]
-colnames(pos) <- c("x","y")
-## make x,y coordinates positive
-pos[,1] <- pos[,1] - min(pos[,1])
-pos[,2] <- pos[,2] - min(pos[,2])
-
-## meta data
-meta <- data_sub[,c("Bregma", "Cell_class", "Neuron_cluster_ID")]
-colnames(meta) <- c("bregma", "celltype", "neurontype")
-
-colnames(mat) <- rownames(pos) <- rownames(meta) <- data_sub$Cell_ID
-
-## filter genes with NaN values
-bad_genes <- names(which(rowSums(is.nan(mat)) > 0))
-mat <- mat[setdiff(rownames(mat),bad_genes),]
-dim(mat)
-
-## filter cells with NaN values
-bad_cells <- names(which(colSums(is.nan(mat)) > 0))
-mat <- mat[,setdiff(colnames(mat),bad_cells)]
-pos <- pos[setdiff(rownames(pos),bad_cells),]
-meta <- meta[setdiff(rownames(pos),bad_cells),]
-
-## log transformation
-par(mfrow=c(2,1))
-hist(colSums(mat))
-hist(log10(colSums(mat) + 1))
-
-mat_lognorm <- as(log10(mat + 1), "CsparseMatrix")
-
-calculateDensity(mat_lognorm)
-
-# format into SpatialExperiment class -------------------------------------
-
-spe <- SpatialExperiment::SpatialExperiment(
-  assays = list(volnorm = mat, lognorm = mat_lognorm),
-  spatialCoords = as.matrix(pos),
-  colData = meta
-)
-
-saveRDS(spe, file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))
+for (animal in animals) {
+  for (sex in sexes) {
+    for (bregma in bregmas) {
+      data_sub <- data[(data$Animal_ID == animal & data$Animal_sex == sex & data$Behavior == behavior & data$Bregma == bregma),]
+      # make sure this condition exists, but it doesn't include all 83 unique conditions
+      if(nrow(data_sub) > 0) {
+        ## extract features x observations matrix, spatial coordinates, meta data
+        ## genes x cells matrix ("total counts per cell divided by the cell volume and scaled by 1000")
+        mat <- as(t(data_sub[,10:ncol(data_sub)]), "CsparseMatrix")
+        blanks <- rownames(mat)[grepl("Blank", rownames(mat))]
+        mat <- mat[setdiff(rownames(mat),blanks),]
+        
+        ## spatial coordinates
+        pos <- data_sub[,c("Centroid_X", "Centroid_Y")]
+        colnames(pos) <- c("x","y")
+        ## make x,y coordinates positive
+        pos[,1] <- pos[,1] - min(pos[,1])
+        pos[,2] <- pos[,2] - min(pos[,2])
+        
+        ## meta data
+        meta <- data_sub[,c("Bregma", "Cell_class", "Neuron_cluster_ID")]
+        colnames(meta) <- c("bregma", "celltype", "neurontype")
+        
+        colnames(mat) <- rownames(pos) <- rownames(meta) <- data_sub$Cell_ID
+        
+        ## filter genes with NaN values
+        bad_genes <- names(which(rowSums(is.nan(mat)) > 0))
+        mat <- mat[setdiff(rownames(mat),bad_genes),]
+        dim(mat)
+        
+        ## filter cells with NaN values
+        bad_cells <- names(which(colSums(is.nan(mat)) > 0))
+        mat <- mat[,setdiff(colnames(mat),bad_cells)]
+        pos <- pos[setdiff(rownames(pos),bad_cells),]
+        meta <- meta[setdiff(rownames(pos),bad_cells),]
+        
+        ## log transformation
+        par(mfrow=c(2,1))
+        hist(colSums(mat))
+        hist(log10(colSums(mat) + 1))
+        
+        mat_lognorm <- as(log10(mat + 1), "CsparseMatrix")
+        
+        calculateDensity(mat_lognorm)
+        
+        # format into SpatialExperiment class -------------------------------------
+        
+        spe <- SpatialExperiment::SpatialExperiment(
+          assays = list(volnorm = mat, lognorm = mat_lognorm),
+          spatialCoords = as.matrix(pos),
+          colData = meta
+        )
+        
+        print(amimal, "_", sex, "_", behavior, "_",  bregma)
+        #saveRDS(spe, file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))
+        
+      }
+    }
+  }
+}
