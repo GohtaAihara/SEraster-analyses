@@ -56,7 +56,7 @@ spe_rast <- nnSVG::nnSVG(
 
 ## Rotate dataset, rasterize, run nnSVG for each resolution
 res_list <- list("singlecell", 50, 100, 200) # feel free to add more resolutions
-n_rotation <- 1 # use 10 for the actual figure!
+n_rotation <- 10 # use 10 for the actual figure!
 angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
 
 ## set BiocParallel parameters

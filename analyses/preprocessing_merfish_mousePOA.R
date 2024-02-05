@@ -34,12 +34,13 @@ data <- read.csv('~/Downloads/lab/data/merfish_mousePOA_all_cells.csv')
 ## look at all the conditions
 conditions <- paste0(data$Animal_ID, "_", data$Animal_sex, "_", data$Behavior, "_", data$Bregma)
 unique(conditions)
+unique_conditions <- c(unique(conditions))
 
 ## subset
-animal <- 10
-sex <- "Male"
+animal <- 1
+sex <- "Female"
 behavior <- "Naive"
-bregma <- "-0.24"
+bregma <- "-0.29"
 data_sub <- data[(data$Animal_ID == animal & data$Animal_sex == sex & data$Behavior == behavior & data$Bregma == bregma),]
 dim(data_sub)
 
@@ -47,12 +48,16 @@ animals <- seq(1, 11, by = 1)
 sexes <- c("Female", "Male")
 bregmas <- seq(-0.29, 0.26, by = 0.05)
 
+count = 0
+
 for (animal in animals) {
   for (sex in sexes) {
     for (bregma in bregmas) {
+      current <- paste(animal, sex, behavior, bregma, sep = "_")
       data_sub <- data[(data$Animal_ID == animal & data$Animal_sex == sex & data$Behavior == behavior & data$Bregma == bregma),]
-      # make sure this condition exists, but it doesn't include all 83 unique conditions
-      if(nrow(data_sub) > 0) {
+      # checks for unique conditions and valid number of cells
+      if(current %in% unique(conditions) & nrow(data_sub) > 0) {
+        data_sub <- data[(data$Animal_ID == animal & data$Animal_sex == sex & data$Behavior == behavior & data$Bregma == bregma),]
         ## extract features x observations matrix, spatial coordinates, meta data
         ## genes x cells matrix ("total counts per cell divided by the cell volume and scaled by 1000")
         mat <- as(t(data_sub[,10:ncol(data_sub)]), "CsparseMatrix")
@@ -99,11 +104,14 @@ for (animal in animals) {
           spatialCoords = as.matrix(pos),
           colData = meta
         )
-        
-        print(amimal, "_", sex, "_", behavior, "_",  bregma)
+        count = count + 1
+        #print(animals, "_", sexes, "_", behavior, "_",  bregmas)
         #saveRDS(spe, file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))
         
       }
     }
   }
 }
+print(count)
+
+  
