@@ -34,7 +34,6 @@ data <- read.csv('~/Downloads/lab/data/merfish_mousePOA_all_cells.csv')
 ## look at all the conditions
 conditions <- paste0(data$Animal_ID, "_", data$Animal_sex, "_", data$Behavior, "_", data$Bregma)
 unique(conditions)
-unique_conditions <- c(unique(conditions))
 
 ## subset
 animal <- 1
@@ -44,19 +43,26 @@ bregma <- "-0.29"
 data_sub <- data[(data$Animal_ID == animal & data$Animal_sex == sex & data$Behavior == behavior & data$Bregma == bregma),]
 dim(data_sub)
 
-animals <- seq(1, 11, by = 1)
-sexes <- c("Female", "Male")
-bregmas <- seq(-0.29, 0.26, by = 0.05)
+# animals <- seq(1, 11, by = 1)
+# sexes <- c("Female", "Male")
+# bregmas <- seq(-0.29, 0.26, by = 0.05)
+
+animals <- unique(data$Animal_ID)
+sexes <- unique(data$Animal_sex)
+bregmas <- unique(data$Bregma)
 
 count = 0
+
 
 for (animal in animals) {
   for (sex in sexes) {
     for (bregma in bregmas) {
-      current <- paste(animal, sex, behavior, bregma, sep = "_")
       data_sub <- data[(data$Animal_ID == animal & data$Animal_sex == sex & data$Behavior == behavior & data$Bregma == bregma),]
+      current <- paste(animal, sex, behavior, bregma, sep = "_")
       # checks for unique conditions and valid number of cells
+      
       if(current %in% unique(conditions) & nrow(data_sub) > 0) {
+        print(paste0(animal, "_", sex, "_", behavior, "_",  bregma))
         data_sub <- data[(data$Animal_ID == animal & data$Animal_sex == sex & data$Behavior == behavior & data$Bregma == bregma),]
         ## extract features x observations matrix, spatial coordinates, meta data
         ## genes x cells matrix ("total counts per cell divided by the cell volume and scaled by 1000")

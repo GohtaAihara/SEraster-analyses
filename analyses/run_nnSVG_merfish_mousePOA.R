@@ -19,6 +19,7 @@ library(here)
 library(tidyr)
 library(tibble)
 library(dplyr)
+library(rearrr)
 
 par(mfrow=c(1,1))
 
@@ -55,8 +56,10 @@ spe_rast <- nnSVG::nnSVG(
 )
 
 ## Rotate dataset, rasterize, run nnSVG for each resolution
-res_list <- list("singlecell", 50, 100, 200) # feel free to add more resolutions
-n_rotation <- 10 # use 10 for the actual figure!
+#res_list <- list("singlecell", 50, 100, 200) # feel free to add more resolutions
+res_list <- list(200) # feel free to add more resolutions
+
+n_rotation <- 5 # use 10 for the actual figure!
 angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
 
 ## set BiocParallel parameters
@@ -103,6 +106,7 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
   }
   return(data.frame(dataset = dataset_name, resolution = res, df))
 }))
+
 saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
 
 # Plot --------------------------------------------------------------------
