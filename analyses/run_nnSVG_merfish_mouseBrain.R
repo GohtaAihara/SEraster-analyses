@@ -1155,7 +1155,67 @@ p4 <- ggplot(df_perf3, aes(x = resolution, y = FN, col = resolution_label)) +
   theme(legend.position = "none")
 grid.arrange(p1, p2, p3, p4, ncol = 2)
 
-## Figure 1d (nnSVG results comparison)
+## more resolutions
+start_res <- 50
+end_res <- 400
+interval_res <- 10
+n_rotation <- 10
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, "_", start_res, "-", end_res, "-by-", interval_res, ".RDS")))
+
+# set a threshold p value
+alpha <- 0.05
+df_perf <- do.call(rbind, lapply(unique(df$resolution), function(res) {
+  if (res != "singlecell") {
+    sc <- df[df$resolution == "singlecell",]
+    df_res <- df[df$resolution == res,]
+    out <- do.call(rbind, lapply(unique(df_res$rotation_deg), function(deg) {
+      print(paste0("Resolution = ", res, ", Angle = ", deg))
+      rast <- df[df$resolution == res & df$rotation_deg == deg,]
+      results_sig <- do.call(rbind, lapply(rast$gene, function(gene) {
+        return(data.frame(gene = gene, pred = rast[rast$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
+      }))
+      out <- calculatePerformanceMetrics(results_sig)
+      return(data.frame(rotation_deg = deg, out))
+    }))
+    return(data.frame(resolution = res, out))
+  }
+}))
+
+df_perf_raw <- df_perf %>%
+  mutate(resolution = as.numeric(resolution)) %>%
+  select(resolution, rotation_deg, TPR, TNR, PPV) %>%
+  pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values")
+
+df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
+  out <- do.call(rbind, lapply(c("TPR", "TNR", "PPV"), function(metric) {
+    temp <- df_perf[df_perf$resolution == res, metric]
+    return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
+  }))
+  return(data.frame(resolution = as.numeric(res), out))
+}))
+
+df_perf2 <- df_perf %>%
+  mutate(resolution = as.numeric(resolution)) %>%
+  select(resolution, TPR, TNR, PPV) %>%
+  pivot_longer(!resolution, names_to = "metrics", values_to = "values")
+
+set.seed(0)
+ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
+  geom_jitter(width = 1, alpha = 0.3, size = 2, stroke = 0) +
+  geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
+  geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
+  geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics), width = 10) +
+  scale_x_continuous(breaks = unique(df_perf2$resolution)) + 
+  ylim(0,1) +
+  labs(title = "Performance",
+       x = "Rasterization Resolution",
+       y = "Performance",
+       col = "Metric") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary_n_rotation_", n_rotation, "_", start_res, "-", end_res, "-by-", interval_res, ".pdf")), width = 6, heigh = 5, dpi = 300)
+
+## Figure 1E (nnSVG results comparison)
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
 df <- df %>%
   mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400"))) %>%

@@ -71,3 +71,66 @@ bbox <- sf::st_bbox(c(
 test <- SEraster::rasterizeMatrix(data, pos, bbox, resolution = resolution)
 data_sub <- data[,1:100]
 test <- SEraster::rasterizeMatrix(data_sub, pos, bbox, resolution = resolution)
+
+
+# Test hexagonal pixels ---------------------------------------------------
+
+data("merfish_mousePOA")
+dim(merfish_mousePOA)
+
+resolution = 50
+pos <- spatialCoords(merfish_mousePOA)
+bbox <- sf::st_bbox(c(
+  xmin = floor(min(pos[,1])-resolution/2), 
+  xmax = ceiling(max(pos[,1])+resolution/2), 
+  ymin = floor(min(pos[,2])-resolution/2), 
+  ymax = ceiling(max(pos[,2])+resolution/2)
+))
+grid_sq <- sf::st_make_grid(bbox, cellsize = resolution)
+grid_hx <- sf::st_make_grid(bbox, cellsize = resolution, square = FALSE)
+
+## rasterize gene expression
+# square
+rastGexp_sq <- SEraster::rasterizeGeneExpression(merfish_mousePOA, assay_name="volnorm", resolution = resolution)
+dim(rastGexp_sq)
+df_sq <- data.frame(spatialCoords(rastGexp_sq), tot_gexp = colSums(assay(rastGexp_sq)))
+ggplot() +
+  coord_fixed() +
+  geom_sf(data = grid_sq) +
+  geom_point(data = df_sq, aes(x = x, y = y, col = tot_gexp)) +
+  scale_color_viridis_c() +
+  theme_bw()
+
+# hexagon
+rastGexp_hx <- SEraster::rasterizeGeneExpression(merfish_mousePOA, assay_name="volnorm", resolution = resolution, square = FALSE)
+dim(rastGexp_hx)
+df_hx <- data.frame(spatialCoords(rastGexp_hx), tot_gexp = colSums(assay(rastGexp_hx)))
+ggplot() +
+  coord_fixed() +
+  geom_sf(data = grid_hx) +
+  geom_point(data = df_hx, aes(x = x, y = y, col = tot_gexp)) +
+  scale_color_viridis_c() +
+  theme_bw()
+
+## rasterize celltypes
+# square
+rastCt_sq <- SEraster::rasterizeCellType(merfish_mousePOA, col_name = "celltype", resolution = resolution)
+dim(rastCt_sq)
+df_sq <- data.frame(spatialCoords(rastCt_sq), Inhibitory = assay(rastCt_sq)["Inhibitory",])
+ggplot() +
+  coord_fixed() +
+  geom_sf(data = grid_sq) +
+  geom_point(data = df_sq, aes(x = x, y = y, col = Inhibitory)) +
+  scale_color_viridis_c(option = "inferno") +
+  theme_bw()
+
+# hexagon
+rastCt_hx <- SEraster::rasterizeCellType(merfish_mousePOA, col_name = "celltype", resolution = resolution, square = FALSE)
+dim(rastCt_hx)
+df_hx <- data.frame(spatialCoords(rastCt_hx), Inhibitory = assay(rastCt_hx)["Inhibitory",])
+ggplot() +
+  coord_fixed() +
+  geom_sf(data = grid_hx) +
+  geom_point(data = df_hx, aes(x = x, y = y, col = Inhibitory)) +
+  scale_color_viridis_c(option = "inferno") +
+  theme_bw()
