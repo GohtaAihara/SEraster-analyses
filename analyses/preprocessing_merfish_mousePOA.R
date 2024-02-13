@@ -43,16 +43,11 @@ bregma <- "-0.29"
 data_sub <- data[(data$Animal_ID == animal & data$Animal_sex == sex & data$Behavior == behavior & data$Bregma == bregma),]
 dim(data_sub)
 
-# animals <- seq(1, 11, by = 1)
-# sexes <- c("Female", "Male")
-# bregmas <- seq(-0.29, 0.26, by = 0.05)
-
 animals <- unique(data$Animal_ID)
 sexes <- unique(data$Animal_sex)
 bregmas <- unique(data$Bregma)
 
 count = 0
-
 
 for (animal in animals) {
   for (sex in sexes) {
@@ -111,13 +106,9 @@ for (animal in animals) {
           colData = meta
         )
         count = count + 1
-        #print(animals, "_", sexes, "_", behavior, "_",  bregmas)
-        #saveRDS(spe, file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))
-        
+        saveRDS(spe, file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))
       }
     }
   }
 }
-print(count)
-
   
