@@ -54,10 +54,14 @@ plot(meta$cell_area, meta$nucleus_area, pch=".")
 
 ## load cell types
 
+# # graph based clustering
 clusters <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/Xenium_humanBreastCancer/analysis/clustering/gene_expression_graphclust/clusters.csv')
 rownames(clusters) <- paste0("cell-", clusters$Barcode)
 
-colnames(gexp) <- rownames(meta) <- rownames(pos) <- paste0("cell-", colnames(gexp))
+# supervised cell type
+celltype <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/Xenium_humanBreastCancer/Cell_Barcode_Type_Matrices_R1_Supervised.csv')
+
+colnames(gexp) <- rownames(meta) <- rownames(pos) <- rownames(celltype) <- paste0("cell-", celltype$Barcode)
 
 ## flip x-axis
 pos[,1] <- -pos[,1]
@@ -67,6 +71,14 @@ pos[,2] <- pos[,2] - min(pos[,2])
 
 ## plot
 plot(pos, pch=".")
+
+df <- data.frame(pos, celltype = celltype$Cluster)
+plt <- ggplot(df, aes(x = x, y = y, col = celltype)) +
+  coord_fixed() +
+  geom_point(size = 0.5, stroke = 0) +
+  theme_bw()
+plt
+plotly::ggplotly(plt)
 
 ## density of feature x observation matrix
 calculateDensity(gexp)
@@ -118,9 +130,15 @@ calculateDensity(gexp_lognorm)
 
 # Format into SpatialExperiment class -------------------------------------
 
-coldata <- clusters[rownames(clusters) %in% good_cells,"Cluster", drop = FALSE]
-colnames(coldata) <- c("cluster")
-coldata$cluster <- as.factor(coldata$cluster)
+coldata <- data.frame(
+  cluster = clusters[rownames(clusters) %in% good_cells,"Cluster"],
+  celltype = celltype[rownames(celltype) %in% good_cells,"Cluster"]
+) %>%
+  mutate(
+    cluster = as.factor(cluster),
+    celltype = as.factor(celltype)
+  )
+rownames(coldata) <- names(good_cells)
 
 spe <- SpatialExperiment::SpatialExperiment(
   assays = list(counts = gexp, lognorm = gexp_lognorm),

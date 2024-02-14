@@ -29,11 +29,11 @@ dataset_name = "xenium_humanBreastCancer"
 spe <- readRDS(file = "outputs/xenium_humanBreastCancer_preprocessed.RDS")
 
 df <- data.frame(spatialCoords(spe), colData(spe))
-ggplot(df, aes(x = x, y = y, col = cluster)) +
-  geom_point(size = 0.1) +
+ggplot(df, aes(x = x, y = y, col = celltype)) +
+  geom_point(size = 0.5, stroke = 0) +
   theme_classic()
 
-ct_labels <- colData(spe)$cluster
+ct_labels <- colData(spe)$celltype
 
 # Run methods -------------------------------------------------------------
 
@@ -43,9 +43,13 @@ res_list <- c(50, 100, 200, 400)
 
 nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
   out <- do.call(rbind, lapply(levels(ct_labels), function(ct_label) {
-    ## subset cluster of interest
-    spe_sub <- spe[,spe$cluster == ct_label]
-    print(paste0("# of cells in cluster ", ct_label, " : ", dim(spe_sub)[2]))
+    # ## subset cluster of interest
+    # spe_sub <- spe[,spe$cluster == ct_label]
+    # print(paste0("# of cells in cluster ", ct_label, " : ", dim(spe_sub)[2]))
+    
+    ## subset celltype of interest
+    spe_sub <- spe[,spe$celltype == ct_label]
+    print(paste0("# of cells in celltype ", ct_label, " : ", dim(spe_sub)[2]))
     
     ## rasterization
     spe_sub_rast <- SEraster::rasterizeGeneExpression(spe_sub, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
@@ -59,12 +63,12 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
     )})
     
     if (class(spe_sub_rast_nnsvg) == "try-error") {
-      ## do not save anything for clusters that caused error in nnSVG
+      ## do not save anything for celltypes that caused error in nnSVG
       return(NULL)
     } else {
       df <- tibble::rownames_to_column(as.data.frame(rowData(spe_sub_rast_nnsvg)), var = "gene")
       return(data.frame(
-        cluster = ct_label, 
+        celltype = ct_label, 
         num_cells = dim(spe_sub)[2], 
         num_pixels = dim(spe_sub_rast)[2], 
         df))
@@ -74,18 +78,18 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
 }))
 
 ## save results
-saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific.RDS")))
+saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific_supervised_celltypes.RDS")))
 
 
 # Plot --------------------------------------------------------------------
 
 ## Figure (single cell visualizations)
 df <- data.frame(spatialCoords(spe), colData(spe))
-ggplot(df, aes(x = x, y = y, col = cluster)) +
+ggplot(df, aes(x = x, y = y, col = celltype)) +
   coord_fixed() +
   geom_point(size = 0.1) +
   labs(title = "Single cell",
-       col = "Cluster") +
+       col = "Cell-type") +
   guides(col = guide_legend(override.aes = list(size = 3))) +
   theme_bw() +
   theme(
@@ -95,7 +99,7 @@ ggplot(df, aes(x = x, y = y, col = cluster)) +
     axis.ticks = element_blank(),
   )
 ## save plot
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_clusters_singlecell.pdf")))
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_celltypes_singlecell.pdf")))
 
 ## Figure (cell-type specific SVGs)
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_ct_specific_v1.RDS")))
@@ -103,26 +107,26 @@ alpha <- 0.05
 df <- df %>%
   mutate(
     resolution = factor(resolution, levels = c(50, 100, 200, 400)),
-    cluster = factor(cluster, levels = levels(ct_labels))
+    celltype = factor(celltype, levels = levels(ct_labels))
     )
 df$svg_boolean <- df$padj <= alpha
 
-# check which clusters were analyzed in each resolution
+# check which celltypes were analyzed in each resolution
 for (res in unique(df$resolution)) {
-  ## print out analyzed clusters
+  ## print out analyzed celltypes
   print(paste0("Resolution: ", res))
-  print(paste0(unique(df[df$resolution == res,]$cluster)))
+  print(paste0(unique(df[df$resolution == res,]$celltype)))
 }
 
-## number of s.s. SVGs identified in each cluster for each resolution
+## number of s.s. SVGs identified in each celltype for each resolution
 df_num_svg <- df %>%
-  group_by(resolution, cluster) %>%
+  group_by(resolution, celltype) %>%
   summarise(num_svg = sum(svg_boolean), num_pixels = mean(num_pixels))
-ggplot(df_num_svg, aes(x = cluster, y = resolution, size = num_svg, col = log10(num_pixels))) +
+ggplot(df_num_svg, aes(x = celltype, y = resolution, size = num_svg, col = log10(num_pixels))) +
   geom_point() +
   scale_color_viridis_c() +
   labs(title = "Number of SVGs",
-       x = "Cluster",
+       x = "Cell-type",
        y = "Resolution",
        size = "Number of SVGs",
        col = "log10(Number of pixels)") +
