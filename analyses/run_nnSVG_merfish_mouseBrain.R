@@ -22,6 +22,7 @@ library(tibble)
 library(dplyr)
 library(pryr)
 library(R.utils)
+library(Seurat)
 
 par(mfrow=c(1,1))
 
@@ -399,6 +400,45 @@ resource_results <- do.call(rbind, lapply(res_list, function(res) {
   return(data.frame(dataset = dataset_name, resolution = res, out))
 }))
 saveRDS(resource_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_memory_", device, "_n=", n_itr, ".RDS")))
+
+## compare the performance with other preprocessing methods (uniform sampling, geometric sketch)
+## for each method, subset to the number of pixels for each resolution
+
+# get number of pixels for each resolution
+res_list <- list(50, 100, 200, 400)
+
+n_rotation <- 10
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+
+deg <- 0
+
+num_pixels <- do.call(rbind, lapply(res_list, function(res) {
+  df_sub <- df[df$resolution == res & df$rotation_deg == deg,]
+  return(data.frame(resolution = res, num_pixels = unique(df_sub$num_points)))
+}))
+
+seed <- 0
+i <- 1
+
+# create a Seurat object
+gexp <- assay(spe, "lognorm")
+obj <- Seurat::CreateSeuratObject(gexp)
+obj <- Seurat::FindVariableFeatures(obj)
+
+# perform geosketching
+obj <- SketchData(
+  object = obj,
+  assay = "RNA",
+  ncells = 5000,
+  method = "LeverageScore",
+  sketched.assay = "sketch",
+  seed = seed
+)
+
+Seurat::DefaultAssay(obj) <- "sketch"
+sce <- Seurat::as.SingleCellExperiment(obj)
+gexp_sketch <- assay(sce)
+dim(gexp_sketch)
 
 # Plot --------------------------------------------------------------------
 
