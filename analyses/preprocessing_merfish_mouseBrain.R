@@ -1,5 +1,7 @@
 ## This file is for loading and preprocessing MERFISH mouse whole brain datasets
 
+## cell-type annotations are obtained from STalign (https://zenodo.org/records/8384019)
+
 # Set up ------------------------------------------------------------------
 
 setwd("~/Desktop/SEraster")

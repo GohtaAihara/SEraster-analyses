@@ -23,6 +23,7 @@ library(dplyr)
 library(pryr)
 library(R.utils)
 library(Seurat)
+library(SeuratData)
 
 par(mfrow=c(1,1))
 
@@ -417,28 +418,109 @@ num_pixels <- do.call(rbind, lapply(res_list, function(res) {
   return(data.frame(resolution = res, num_pixels = unique(df_sub$num_points)))
 }))
 
-seed <- 0
-i <- 1
+seeds <- seq(1,10)
 
-# create a Seurat object
-gexp <- assay(spe, "lognorm")
-obj <- Seurat::CreateSeuratObject(gexp)
-obj <- Seurat::FindVariableFeatures(obj)
+# geometric sketching
+nnsvg_results_sketch <- do.call(rbind, lapply(seq_along(res_list), function(i) {
+  out <- do.call(rbind, lapply(seeds, function(seed) {
+    print(paste0("Resolution: ", res_list[[i]], ", # of pixels: ", num_pixels[i,2], ", Seed: ", seed))
+    
+    # create a Seurat object from raw counts --> "counts" layer in RNA assay
+    obj <- Seurat::CreateSeuratObject(assay(spe, "counts"))
+    # add log-normalized values as "data" layer in RNA assay
+    obj[["RNA"]]$data <- assay(spe, "lognorm")
+    # find highly variable genes in the dataset (all genes in this case)
+    obj <- Seurat::FindVariableFeatures(obj)
 
-# perform geosketching
-obj <- SketchData(
-  object = obj,
-  assay = "RNA",
-  ncells = 5000,
-  method = "LeverageScore",
-  sketched.assay = "sketch",
-  seed = seed
-)
+    # perform geometry sketching
+    obj <- Seurat::SketchData(
+      object = obj,
+      assay = "RNA",
+      ncells = num_pixels[i,2],
+      method = "LeverageScore",
+      sketched.assay = "sketch",
+      seed = seed
+    )
 
-Seurat::DefaultAssay(obj) <- "sketch"
-sce <- Seurat::as.SingleCellExperiment(obj)
-gexp_sketch <- assay(sce)
-dim(gexp_sketch)
+    # get cell IDs from sampled dataset
+    selected_cells <- colnames(obj[["sketch"]]$counts)
+
+    # subset the original SpatialExperiment data
+    spe_sketch <- spe[,colnames(spe) %in% selected_cells]
+    stopifnot(dim(spe_sketch)[2] == num_pixels[i,2])
+
+    # sanity check
+    pos_sketch <- spatialCoords(spe_sketch)
+    meta_sketch <- colData(spe_sketch)
+    gexp_sketch <- assay(spe_sketch, "lognorm")
+    stopifnot(identical(rownames(pos_sketch), colnames(gexp_sketch)))
+    stopifnot(identical(rownames(meta_sketch), colnames(gexp_sketch)))
+    
+    # perform nnSVG
+    # using try() to handle error
+    spe_sketch <- try({
+      nnSVG::nnSVG(
+        spe_sketch,
+        assay_name = "lognorm",
+        BPPARAM = BiocParallel::MulticoreParam()
+      )
+    })
+    
+    if (class(spe_sketch) == "try-error") {
+      ## do not save anything for clusters that caused error in nnSVG
+      return(NULL)
+    } else {
+      temp <- rownames_to_column(as.data.frame(rowData(spe_sketch)), var = "gene")
+      temp <- cbind(seed = seed, num_points = dim(spe_sketch)[2], temp)
+      return(temp)
+    }
+  }))
+  return(data.frame(dataset = dataset_name, resolution = res_list[[i]], method = "geometric_sketching", out))
+}))
+saveRDS(nnsvg_results_sketch, file = here("outputs", paste0(dataset_name, "_nnsvg_global_geometric_sketching.RDS")))
+
+# uniform sampling
+nnsvg_results_uniform <- do.call(rbind, lapply(seq_along(res_list), function(i) {
+  out <- do.call(rbind, lapply(seeds, function(seed) {
+    print(paste0("Resolution: ", res_list[[i]], ", # of pixels: ", num_pixels[i,2], ", Seed: ", seed))
+    
+    # randomly sample cell IDs from the original SpatialExperiment data
+    set.seed(seed)
+    selected_cells <- sample(colnames(spe), num_pixels[i,2])
+    
+    # subset the original SpatialExperiment data
+    spe_uniform <- spe[,colnames(spe) %in% selected_cells]
+    stopifnot(dim(spe_uniform)[2] == num_pixels[i,2])
+    
+    # sanity check
+    pos_uniform <- spatialCoords(spe_uniform)
+    meta_uniform <- colData(spe_uniform)
+    gexp_uniform <- assay(spe_uniform, "lognorm")
+    stopifnot(identical(rownames(pos_uniform), colnames(gexp_uniform)))
+    stopifnot(identical(rownames(meta_uniform), colnames(gexp_uniform)))
+    
+    # perform nnSVG
+    # using try() to handle error
+    spe_uniform <- try({
+      nnSVG::nnSVG(
+        spe_uniform,
+        assay_name = "lognorm",
+        BPPARAM = BiocParallel::MulticoreParam()
+      )
+    })
+    
+    if (class(spe_uniform) == "try-error") {
+      ## do not save anything for clusters that caused error in nnSVG
+      return(NULL)
+    } else {
+      temp <- rownames_to_column(as.data.frame(rowData(spe_uniform)), var = "gene")
+      temp <- cbind(seed = seed, num_points = dim(spe_uniform)[2], temp)
+      return(temp)
+    }
+  }))
+  return(data.frame(dataset = dataset_name, resolution = res_list[[i]], method = "uniform", out))
+}))
+saveRDS(nnsvg_results_uniform, file = here("outputs", paste0(dataset_name, "_nnsvg_global_uniform.RDS")))
 
 # Plot --------------------------------------------------------------------
 
