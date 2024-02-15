@@ -475,7 +475,14 @@ nnsvg_results_sketch <- do.call(rbind, lapply(seq_along(res_list), function(i) {
       return(temp)
     }
   }))
-  return(data.frame(dataset = dataset_name, resolution = res_list[[i]], method = "geometric_sketching", out))
+  
+  if (is.null(out)) {
+    print(paste0("All conditions for resolution ", res_list[[i]], " failed"))
+    return(NULL)
+  } else {
+    return(data.frame(dataset = dataset_name, resolution = res_list[[i]], method = "geometric_sketching", out))
+  }
+  
 }))
 saveRDS(nnsvg_results_sketch, file = here("outputs", paste0(dataset_name, "_nnsvg_global_geometric_sketching.RDS")))
 
@@ -518,7 +525,14 @@ nnsvg_results_uniform <- do.call(rbind, lapply(seq_along(res_list), function(i) 
       return(temp)
     }
   }))
-  return(data.frame(dataset = dataset_name, resolution = res_list[[i]], method = "uniform", out))
+  
+  if (is.null(out)) {
+    print(paste0("All conditions for resolution ", res_list[[i]], " failed"))
+    return(NULL)
+  } else {
+    return(data.frame(dataset = dataset_name, resolution = res_list[[i]], method = "uniform", out))
+  }
+  
 }))
 saveRDS(nnsvg_results_uniform, file = here("outputs", paste0(dataset_name, "_nnsvg_global_uniform.RDS")))
 
