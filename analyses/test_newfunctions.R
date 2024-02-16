@@ -6,6 +6,9 @@ setwd("~/Desktop/SEraster-analyses/")
 
 library(here)
 
+
+# Test plotting function in general --------------------------------------------------
+
 dataset_name = "codex_humanSpleen"
 method = "CooccurrenceAffinity"
 
@@ -16,6 +19,9 @@ ct_label <- "Fol B cells"
 plotRaster(spe_rast, assay_name = "pixelval", feature_name = "Fol B cells", name = "cell-type counts", option = "inferno")
 plotRaster(spe_rast, assay_name = "re", feature_name = "Fol B cells", name = "RE", option = "inferno")
 plotRaster(spe_rast, assay_name = "bin", feature_name = "Fol B cells", factor_levels = c(0,1), name = "binarized", option = "inferno")
+
+
+# Test tutorial codes -----------------------------------------------------
 
 data("merfish_mousePOA")
 class(merfish_mousePOA)
@@ -71,7 +77,6 @@ bbox <- sf::st_bbox(c(
 test <- SEraster::rasterizeMatrix(data, pos, bbox, resolution = resolution)
 data_sub <- data[,1:100]
 test <- SEraster::rasterizeMatrix(data_sub, pos, bbox, resolution = resolution)
-
 
 # Test hexagonal pixels ---------------------------------------------------
 
@@ -134,3 +139,17 @@ ggplot() +
   geom_point(data = df_hx, aes(x = x, y = y, col = Inhibitory)) +
   scale_color_viridis_c(option = "inferno") +
   theme_bw()
+
+
+# Test when bigger than dataset resolution --------------------------------
+
+data("merfish_mousePOA")
+class(merfish_mousePOA)
+
+## get range
+diff(range(spatialCoords(merfish_mousePOA)[,1]))
+diff(range(spatialCoords(merfish_mousePOA)[,2]))
+
+## for tutorials
+rastCt <- SEraster::rasterizeCellType(merfish_mousePOA, col_name = "celltype", resolution = 5000, verbose = TRUE)
+plotRaster(rastCt, assay_name = "pixelval", feature_name = "Inhibitory", name = "cell-type counts", option = "inferno")
