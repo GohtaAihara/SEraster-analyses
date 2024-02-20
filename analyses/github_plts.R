@@ -87,7 +87,7 @@ table(rowData(rastGexp_sub)$padj <= 0.05)
 # plot rasterized gene expression of top-ranked SVG
 top_svg <- which(rowData(rastGexp_sub)$rank == 1)
 top_svg_name <- rownames(rowData(rastGexp_sub))[top_svg]
-SEraster::plotRaster(rastGexp_sub, feature_name = top_svg_name, resolution = 50, name = top_svg_name)
+SEraster::plotRaster(rastGexp_sub, feature_name = top_svg_name, name = top_svg_name)
 ggsave(filename = here(dir_plt, "rasterized_gexp_sub_top_svg.png"), dpi = 300)
 
 ## cell-type cooccurrence

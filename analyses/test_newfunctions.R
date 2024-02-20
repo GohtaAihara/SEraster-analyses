@@ -27,7 +27,7 @@ data("merfish_mousePOA")
 class(merfish_mousePOA)
 
 ## for tutorials
-rastCt <- SEraster::rasterizeCellType(merfish_mousePOA, col_name = "celltype", resolution = 50)
+rastCt <- SEraster::rasterizeCellType(merfish_mousePOA, col_name = "celltype", resolution = 50, square = FALSE)
 
 # extract cell-type labels
 ct_labels <- as.factor(colData(merfish_mousePOA)$celltype)
