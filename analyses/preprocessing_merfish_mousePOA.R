@@ -56,7 +56,7 @@ for (animal in animals) {
       current <- paste(animal, sex, behavior, bregma, sep = "_")
       # checks for unique conditions and valid number of cells
       
-      if(current %in% unique(conditions) & nrow(data_sub) > 0) {
+      if(current %in% unique(conditions)) {
         print(paste0(animal, "_", sex, "_", behavior, "_",  bregma))
         data_sub <- data[(data$Animal_ID == animal & data$Animal_sex == sex & data$Behavior == behavior & data$Bregma == bregma),]
         ## extract features x observations matrix, spatial coordinates, meta data
@@ -105,8 +105,10 @@ for (animal in animals) {
           spatialCoords = as.matrix(pos),
           colData = meta
         )
-        count = count + 1
+        
         saveRDS(spe, file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))
+        
+        count = count + 1
       }
     }
   }

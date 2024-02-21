@@ -30,105 +30,130 @@ method <- "CooccurrenceAffinity"
 
 # Load dataset ------------------------------------------------------------
 
-spe <- readRDS(file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))
+data <- read.csv('~/Downloads/lab/data/merfish_mousePOA_all_cells.csv')
 
-df <- data.frame(spatialCoords(spe), colData(spe))
-ggplot(df, aes(x = x, y = y, col = celltype)) +
-  geom_point(size = 0.5, stroke = 0) +
-  theme_classic()
-
-ct_labels <- as.factor(colData(spe)$celltype)
-
-# specify
 animal <- 1
 sex <- "Female"
 behavior <- "Naive"
 bregma <- "-0.29"
+ 
+animals <- unique(data$Animal_ID)
+sexes <- unique(data$Animal_sex)
+bregmas <- unique(data$Bregma)
 
+count = 0
 
-plot(spatialCoords(spe), pch=".", asp=1)
-
-ct_labels <- as.factor(colData(spe)$celltype)
-
-# Run method --------------------------------------------------------------
-
-## modify code from "run_CooccurrenceAffinity_codex_humanSpleen.R"
-
-res_list <- list(50, 100, 200, 400)
-
-## parameters for CooccurrenceAffinity
-## set confidence interval method ("CP", "Blaker", "midQ", or "midP")
-CI_method <- "Blaker"
-## create a dictionary and index of CI method
-CI_method_dict <- c("CP" = 6, "Blaker" = 7, "midQ" = 8, "midP" = 9)
-## set confidence interval level (default = 0.95)
-CI_lev <- 0.95
-## set pval method ("Blaker" or "midP", default = "Blaker")
-pval_method <- "Blaker"
-
-
-for (res in res_list) {
-  print(paste0("Resolution = ", res))
-  ## rasterize
-  # col_name error
-  spe_rast <- SEraster::rasterizeCellType(spe, "celltype", resolution = res, fun = "sum", BPPARAM = BiocParallel::MulticoreParam())
-  
-  ##spe_rast <- SEraster::rasterizeCellType(spe, col_name = spe$celltype, resolution = res, fun = "sum", BPPARAM = BiocParallel::MulticoreParam())
-  
-  ## compute relative enrichment (RE) metric (the output is dense matrix)
-  mat <- assay(spe_rast, "pixelval")
-  mat_re <- do.call(rbind, lapply(rownames(spe_rast), function(ct_label) {
-    ## relative enrichment = celltype observed / celltype expected = celltype observed / (celltype frequency * total # of cells in the pixel)
-    mat[ct_label,] / (sum(mat[ct_label,]) / sum(mat) * colSums(mat))
-  }))
-  rownames(mat_re) <- rownames(mat)
-  
-  ## binarize (1 if RE >= 1, 0 if RE < 1)
-  mat_bin <- ifelse(mat_re >= 1, 1, 0)
-  
-  ## add RE and binary layers to SpatialExperiment object
-  assays(spe_rast) <- list(pixelval = assay(spe_rast, "pixelval"), re = mat_re, bin = mat_bin)
-  
-  ## save updated SpatialExperiment object
-  ## saveRDS(spe_rast, file = here("outputs", paste0(dataset_name, "_rasterized_resolution_", res, "_binarized.RDS")))
-  
-  ## compute affinity MLE using CooccurrenceAffinity (store the log-affinity metric, CI, and pvalue for each pair)
-  ## get pair combinations
-  non_self <- combn(levels(ct_labels), 2, simplify = FALSE)
-  self <- lapply(levels(ct_labels), function(ct_label) c(ct_label, ct_label))
-  pairs <- c(non_self, self)
-  
-  ## multiply pixel values for each pair of cell types
-  affinity_results <- do.call(rbind, lapply(pairs, function(pair) {
-    ## create a 2x2 contingency table of counts
-    cont_tab <- table(factor(mat_bin[pair[1],], levels = c(0,1)), factor(mat_bin[pair[2],], levels = c(0,1)))
-    X <- cont_tab[2,2]
-    mA <- sum(cont_tab[2,])
-    mB <- sum(cont_tab[,2])
-    N <- sum(cont_tab)
-    
-    ## out <- CooccurrenceAffinity::ML.Alpha(X,c(mA,mB,N), lev = CI_lev, pvalType = pval_method)
-    out <- CooccurrenceAffinity::ML.Alpha(X,c(mA,mB,N), lev = CI_lev, pvalType = pval_method)
-    
-    ## set index for the chosen CI method
-    CI_idx <- CI_method_dict[CI_method][[1]]
-    
-    return(data.frame(
-      pair = paste(pair, collapse = " & "),
-      celltypeA = factor(pair[1], levels = levels(ct_labels)),
-      celltypeB = factor(pair[2], levels = levels(ct_labels)),
-      X = X,
-      mA = mA,
-      mB = mB,
-      N = N,
-      alpha = out$est, ci.min = out[CI_idx][[1]][1], 
-      ci.max = out[CI_idx][[1]][2], 
-      pval = out$pval)
-    )
-  }))
-  ## save results
-  saveRDS(affinity_results, file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+for (animal in animals) {
+  for (sex in sexes) {
+    for (bregma in bregmas) {
+      if (file.exists(here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))) {
+        count = count + 1
+        spe <- readRDS(file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))
+        
+        df <- data.frame(spatialCoords(spe), colData(spe))
+        ggplot(df, aes(x = x, y = y, col = celltype)) +
+          geom_point(size = 0.5, stroke = 0) +
+          theme_classic()
+        
+        ct_labels <- as.factor(colData(spe)$celltype)
+        
+        # specify
+        animal <- 1
+        sex <- "Female"
+        behavior <- "Naive"
+        bregma <- "-0.29"
+        
+        
+        plot(spatialCoords(spe), pch=".", asp=1)
+        
+        ct_labels <- as.factor(colData(spe)$celltype)
+        
+        # Run method --------------------------------------------------------------
+        
+        ## modify code from "run_CooccurrenceAffinity_codex_humanSpleen.R"
+        
+        res_list <- list(50, 100, 200, 400)
+        
+        ## parameters for CooccurrenceAffinity
+        ## set confidence interval method ("CP", "Blaker", "midQ", or "midP")
+        CI_method <- "Blaker"
+        ## create a dictionary and index of CI method
+        CI_method_dict <- c("CP" = 6, "Blaker" = 7, "midQ" = 8, "midP" = 9)
+        ## set confidence interval level (default = 0.95)
+        CI_lev <- 0.95
+        ## set pval method ("Blaker" or "midP", default = "Blaker")
+        pval_method <- "Blaker"
+        
+        
+        for (res in res_list) {
+          print(paste0("Resolution = ", res))
+          ## rasterize
+          # col_name error
+          spe_rast <- SEraster::rasterizeCellType(spe, "celltype", resolution = res, fun = "sum", BPPARAM = BiocParallel::MulticoreParam())
+          
+          ##spe_rast <- SEraster::rasterizeCellType(spe, col_name = spe$celltype, resolution = res, fun = "sum", BPPARAM = BiocParallel::MulticoreParam())
+          
+          ## compute relative enrichment (RE) metric (the output is dense matrix)
+          mat <- assay(spe_rast, "pixelval")
+          mat_re <- do.call(rbind, lapply(rownames(spe_rast), function(ct_label) {
+            ## relative enrichment = celltype observed / celltype expected = celltype observed / (celltype frequency * total # of cells in the pixel)
+            mat[ct_label,] / (sum(mat[ct_label,]) / sum(mat) * colSums(mat))
+          }))
+          rownames(mat_re) <- rownames(mat)
+          
+          ## binarize (1 if RE >= 1, 0 if RE < 1)
+          mat_bin <- ifelse(mat_re >= 1, 1, 0)
+          
+          ## add RE and binary layers to SpatialExperiment object
+          assays(spe_rast) <- list(pixelval = assay(spe_rast, "pixelval"), re = mat_re, bin = mat_bin)
+          
+          ## save updated SpatialExperiment object
+          saveRDS(spe_rast, file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_rasterized_resolution_", res, "_binarized.RDS")))
+          
+          ## compute affinity MLE using CooccurrenceAffinity (store the log-affinity metric, CI, and pvalue for each pair)
+          ## get pair combinations
+          non_self <- combn(levels(ct_labels), 2, simplify = FALSE)
+          self <- lapply(levels(ct_labels), function(ct_label) c(ct_label, ct_label))
+          pairs <- c(non_self, self)
+          
+          ## multiply pixel values for each pair of cell types
+          affinity_results <- do.call(rbind, lapply(pairs, function(pair) {
+            ## create a 2x2 contingency table of counts
+            cont_tab <- table(factor(mat_bin[pair[1],], levels = c(0,1)), factor(mat_bin[pair[2],], levels = c(0,1)))
+            X <- cont_tab[2,2]
+            mA <- sum(cont_tab[2,])
+            mB <- sum(cont_tab[,2])
+            N <- sum(cont_tab)
+            
+            ## out <- CooccurrenceAffinity::ML.Alpha(X,c(mA,mB,N), lev = CI_lev, pvalType = pval_method)
+            out <- CooccurrenceAffinity::ML.Alpha(X,c(mA,mB,N), lev = CI_lev, pvalType = pval_method)
+            
+            ## set index for the chosen CI method
+            CI_idx <- CI_method_dict[CI_method][[1]]
+            
+            return(data.frame(
+              pair = paste(pair, collapse = " & "),
+              celltypeA = factor(pair[1], levels = levels(ct_labels)),
+              celltypeB = factor(pair[2], levels = levels(ct_labels)),
+              X = X,
+              mA = mA,
+              mB = mB,
+              N = N,
+              alpha = out$est, ci.min = out[CI_idx][[1]][1], 
+              ci.max = out[CI_idx][[1]][2], 
+              pval = out$pval)
+            )
+          }))
+          ## save results
+          saveRDS(affinity_results, file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+        }
+      }
+    }
+  }
 }
+
+print(count)
+
 
 ## runtime analysis
 n_itr <- 5
@@ -318,8 +343,6 @@ p3 <- ggplot(df, aes(x = x, y = y, fill = bin)) +
 plt_comb <- grid.arrange(p1, p2, p3, ncol = 3, top = paste0("Cell type: ", ct_label))
 ggsave(plt_comb, filename = here("plots", dataset_name, paste0(dataset_name, "_rasterized_data_inferno.pdf")), width = 8, height = 3, dpi = 300)
 
-
-## modify code from "run_CooccurrenceAffinity_codex_humanSpleen.R" (hiearchical clustering of heatmap)
 
 
 # Questions ---------------------------------------------------------------
