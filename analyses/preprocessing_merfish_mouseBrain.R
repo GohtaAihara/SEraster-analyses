@@ -50,6 +50,7 @@ calculateDensity(gexp)
 ct_labels <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/MERFISH_cortex_For_Daniel/STalign_celltypeannotations_merfishslices.csv.gz', row.names = 1)
 rownames(ct_labels) <- paste0("cell-", rownames(ct_labels))
 
+ct_labels_sub <- ct_labels[rownames(ct_labels) %in% colnames(gexp), , drop = FALSE]
 
 # Preprocessing -----------------------------------------------------------
 
