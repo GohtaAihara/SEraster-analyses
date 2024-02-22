@@ -12,7 +12,7 @@ source("analyses/functions.R")
 
 library(SpatialExperiment)
 library(Matrix)
-library(sf)
+# library(sf)
 library(ggplot2)
 library(ggrastr)
 library(nnSVG)
@@ -1179,7 +1179,7 @@ alpha <- 0.05
 svgs <- df[(df$resolution == "singlecell" & df$padj <= alpha),]$gene # 401
 non_svgs <- df[(df$resolution == "singlecell" & df$padj > alpha),]$gene # 82
 # label each gene as TP, TN, FP, FN
-df_perf4 <- df %>%
+df_perf4 <- df_sub %>%
   mutate(confusion_matrix = case_when(
     gene %in% svgs & padj <= alpha ~ "TP",
     gene %in% non_svgs & padj > alpha ~ "TN",
@@ -1195,7 +1195,8 @@ setdiff(test_svgs, svgs)
 test_non_svgs <- test[test$confusion_matrix %in% c("FP", "TN"),]$gene
 length(test_non_svgs)
 setdiff(test_non_svgs, non_svgs)
-# venn diagram
+# subset to relevant resolutions and permutations
+
 ##WIP
 
 # what if we make the number of SVG and non-SVG the same? (balanced dataset)
