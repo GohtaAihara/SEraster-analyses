@@ -192,7 +192,6 @@ u_df <- data.frame(gene = df$gene,
                        resolution = df$resolution, 
                        identified = ifelse(df$pval < 0.05, 1, 0))
 
-
 sc_df <- u_df[u_df$resolution == "singlecell", ]
 res_50 <- u_df[u_df$resolution == 50, ]
 res_100 <- u_df[u_df$resolution == 100, ]
