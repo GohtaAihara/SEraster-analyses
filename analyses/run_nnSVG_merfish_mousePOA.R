@@ -33,7 +33,7 @@ data <- read.csv('~/Downloads/lab/data/merfish_mousePOA_all_cells.csv')
 animal <- 1
 sex <- "Female"
 behavior <- "Naive"
-bregma <- "-0.29"
+bregma <- "-0.19"
 
 animals <- unique(data$Animal_ID)
 sexes <- unique(data$Animal_sex)
@@ -41,6 +41,7 @@ bregmas <- unique(data$Bregma)
 
 count = 0
 
+#run on mac studio
 for (animal in animals) {
   for (sex in sexes) {
     for (bregma in bregmas) {
@@ -55,8 +56,6 @@ for (animal in animals) {
         res <- 200
         ## SEraster
         spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
-        # assays(0)
-        
         dim(spe_rast)[2] # number of spatial points
         
         ## nnSVG
@@ -67,10 +66,9 @@ for (animal in animals) {
         )
         
         ## Rotate dataset, rasterize, run nnSVG for each resolution
-        # res_list <- list("singlecell", 50, 100, 200) # feel free to add more resolutions
-        res_list <- list(50, 100, 200)
+        res_list <- list("singlecell", 50, 100, 200) # feel free to add more resolutions
         
-        n_rotation <- 5 # use 10 for the actual figure!
+        n_rotation <- 10 # use 10 for the actual figure!
         angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
         
         ## set BiocParallel parameters
@@ -125,14 +123,15 @@ for (animal in animals) {
 
 # Plot --------------------------------------------------------------------
 
-# for (animal in animals) {
-#   for (sex in sexes) {
-#     for (bregma in bregmas) {
-#       if (file.exists(here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))) {
+#run on mac studio? 
+for (animal in animals) {
+  for (sex in sexes) {
+    for (bregma in bregmas) {
+      if (file.exists(here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))) {
         ## Figure x (performance comparison)
         n_rotation <- 1
         angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
-        df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+        df <- readRDS(file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
         # set a threshold p value
         alpha <- 0.05
         df_perf <- do.call(rbind, lapply(unique(df$resolution), function(res) {
@@ -152,7 +151,6 @@ for (animal in animals) {
         
         df_perf_raw <- df_perf %>%
           mutate(resolution = as.numeric(resolution)) %>%
-          #select(resolution, rotation_deg, TPR, specificity, PPV) %>%
           select(resolution, rotation_deg, TPR, TNR, PPV) %>%
           
           pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values")
@@ -168,52 +166,80 @@ for (animal in animals) {
         
         df_perf2 <- df_perf %>%
           mutate(resolution = as.numeric(resolution)) %>%
-          #select(resolution, TPR, specificity, PPV) %>%
           select(resolution, TPR, TNR, PPV) %>%
           pivot_longer(!resolution, names_to = "metrics", values_to = "values")
         
         ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
-          # geom_jitter(width = 10, alpha = 0.3) +
+          geom_jitter(width = 10, alpha = 0.3) +
           geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
           geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
           geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics), width = 10) +
           scale_x_continuous(breaks = unique(df_perf2$resolution)) + 
           ylim(0,1) +
-          labs(title = "Performance for 1_Female_Naive_-0.19",
+          labs(title = paste("mPOA Performance for", animal, sex, behavior, bregma),
                x = "Rasterization Resolution",
                y = "Performance",
                col = "Metric") +
           theme_bw()
         ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_perf_metric_summary.pdf")), width = 6, heigh = 5, dpi = 300)
-    
-# add upset plot
-
-upset_df <- data.frame(resolution = df$resolution, 
-                     gene = df$gene,
-                     pval = df$pval)
-
-just200um <- upset_df[upset_df$resolution == 200, ]
-identified_200um <- upset_df[upset_df$resolution == 200 & upset_df$pval < 0.05, ]
-not_identified_200um <- upset_df[upset_df$resolution == 200 & upset_df$pval > 0.05, ]
-
-
-
+      }
+    }
+  }
+}
         
+## visualize intersection of SVGs across different resolutions
+u_df <- data.frame(gene = df$gene,
+                       resolution = df$resolution, 
+                       identified = ifelse(df$pval < 0.05, 1, 0))
 
 
+sc_df <- u_df[u_df$resolution == "singlecell", ]
+res_50 <- u_df[u_df$resolution == 50, ]
+res_100 <- u_df[u_df$resolution == 100, ]
+res_200 <- u_df[u_df$resolution == 200, ]
+
+upset_df <- data.frame(gene = sc_df$gene,
+                   sc = sc_df$identified,
+                   r50 = res_50$identified,
+                   r100 = res_100$identified,
+                   r200 = res_200$identified)
+
+upset(upset_df)
+
+## identify which genes + visualize their patterns
+
+## plot single cell
+df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = assay(spe, "counts")[gene,])
+ggplot(df, aes(x = x, y = y, col = gene)) +
+  coord_fixed() +
+  geom_point(size = 1, stroke = 0) +
+  scale_color_viridis_c() +
+  theme_bw() +
+  theme(
+    legend.position="none",
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+identified_sc <- u_df[u_df$resolution == "singlecell" & u_df$pval < 0.05, ]
+
+# identified_200um <- upset_df[upset_df$resolution == 200 & upset_df$pval < 0.05, ]
+# not_identified_200um <- upset_df[upset_df$resolution == 200 & upset_df$pval > 0.05, ]
+# res_200um <- upset_df[upset_df$resolution == 200, ]
+# res_200um$pval <- ifelse(res_200um$pval < 0.05, 1, 0)
+# res_200um <- data.frame(as.list(res_200um))
 
 
-        
-        
 
 # Questions ---------------------------------------------------------------
 
 # Is the performance consistent across bregma sections for each mouse OR across mice for each bregma section?
 # only tested for 1_Female_Naive_0.29
-# TNR - no change from res 100 to 200; could be bc parameter is TNR, not specificity?
 # PPV slightly higher, TPR looks the correct
 
 # How does the correlation of nnSVG outputs look like single-cell vs. rasterized resolutions (e.g. gene ranking)?
+
 
 # UpSetR
 # Jake R Conway, Alexander Lex, Nils Gehlenborg UpSetR: An R Package for the Visualization of Intersecting Sets and their Properties doi: 
