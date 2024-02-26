@@ -58,6 +58,7 @@ bpparam <- BiocParallel::MulticoreParam(workers = 10)
 bpparam
 
 #run on mac studio
+behavior <- "Naive"
 for (animal in animals) {
   for (sex in sexes) {
     for (bregma in bregmas) {
@@ -74,13 +75,21 @@ for (animal in animals) {
             num_points = dim(spe)[2]
             
             ## nnSVG
-            spe <- nnSVG::nnSVG(
-              spe,
-              assay_name = "lognorm",
-              BPPARAM = bpparam
-            )
-            df <- rownames_to_column(as.data.frame(rowData(spe)), var = "gene")
-            df <- cbind(rotation_deg = NA, num_points = num_points, df)
+            spe <- try({
+              nnSVG::nnSVG(
+                spe,
+                assay_name = "lognorm",
+                BPPARAM = bpparam
+              )
+            })
+            if (class(spe) == "try-error") {
+              ## do not save anything for clusters that caused error in nnSVG
+              return(NULL)
+              
+            } else {
+              df <- rownames_to_column(as.data.frame(rowData(spe)), var = "gene")
+              df <- cbind(rotation_deg = NA, num_points = num_points, df)
+            }
           } else {
             df <- do.call(rbind, lapply(angle_deg_list, function(deg) {
               print(paste0("Rotation (degrees): ", deg))
@@ -114,7 +123,7 @@ for (animal in animals) {
             }))
           }
           if (is.null(df)) {
-            print(paste0("All rotations for resolution ", res, " failed"))
+            print(paste0("All permutations (rotations) for resolution ", res, " failed"))
             return(NULL)
           } else {
             return(data.frame(dataset = dataset_name, resolution = res, df))
@@ -129,11 +138,26 @@ for (animal in animals) {
 
 # Bug fix -----------------------------------------------------------------
 
-animal <- 1
+behavior <- "Naive"
+
+animal <- 2
 sex <- "Female"
-bregma <- 0.26
+bregma <- -0.29
+
+bpparam <- BiocParallel::MulticoreParam(workers = 10)
+
 spe <- readRDS(file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))
 
+plot(spatialCoords(spe), pch=".", asp=1)
+
+## single-cell
+spe <- nnSVG::nnSVG(
+  spe,
+  assay_name = "lognorm",
+  BPPARAM = bpparam
+)
+
+## rasterization
 res <- 200
 deg <- 36
 ## rotate xy coordinates
