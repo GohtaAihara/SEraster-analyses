@@ -43,11 +43,19 @@ bregmas <- unique(data$Bregma)
 
 count = 0
 
+## set resolution parameters
+res_list <- list("singlecell", 50, 100, 200) # feel free to add more resolutions
+
+## set rotation/permutation parameters
+n_rotation <- 10 # use 10 for the actual figure!
+angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
+
 ## set BiocParallel parameters
 # the number of workers is set to be the number of physical cores
 # bpparam <- BiocParallel::MulticoreParam()
 # bpparam <- BiocParallel::MulticoreParam(workers = parallel::detectCores(logical = FALSE))
 bpparam <- BiocParallel::MulticoreParam(workers = 10)
+bpparam
 
 #run on mac studio
 for (animal in animals) {
@@ -55,30 +63,11 @@ for (animal in animals) {
     for (bregma in bregmas) {
       if (file.exists(here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))) {
         count = count + 1
+        print(paste0("Animal: ", animal, ", Sex: ", sex, ", Bregma: ", bregma))
         spe <- readRDS(file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))
         plot(spatialCoords(spe), pch=".", asp=1)
         
-        # Run method --------------------------------------------------------------
-        
-        ## test if each resolution can be run (it seems like 200 um works but not 400 um)
-        res <- 200
-        ## SEraster
-        spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
-        dim(spe_rast)[2] # number of spatial points
-        
-        ## nnSVG
-        spe_rast <- nnSVG::nnSVG(
-          spe_rast,
-          assay_name = "pixelval",
-          BPPARAM = BiocParallel::MulticoreParam()
-        )
-        
         ## Rotate dataset, rasterize, run nnSVG for each resolution
-        res_list <- list("singlecell", 50, 100, 200) # feel free to add more resolutions
-        
-        n_rotation <- 10 # use 10 for the actual figure!
-        angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
-        
         nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
           print(paste0("Resolution: ", res))
           if (res == "singlecell") {
@@ -136,6 +125,35 @@ for (animal in animals) {
     }
   }
 }
+
+
+# Bug fix -----------------------------------------------------------------
+
+animal <- 1
+sex <- "Female"
+bregma <- 0.26
+spe <- readRDS(file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))
+
+res <- 200
+deg <- 36
+## rotate xy coordinates
+spe_rotated <- SpatialExperiment::SpatialExperiment(
+  assays = assays(spe),
+  spatialCoords = rotateAroundCenter(spatialCoords(spe), deg)
+)
+
+## rasterization
+spe_rast <- SEraster::rasterizeGeneExpression(spe_rotated, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = bpparam)
+num_points = dim(spe_rast)[2]
+
+## nnSVG (might want to use try(), see "run_nnSVG_nnSVG_simulations.R")
+spe_rast <- try({
+  nnSVG::nnSVG(
+    spe_rast,
+    assay_name = "pixelval",
+    BPPARAM = bpparam
+  )
+})
 
 # Plot --------------------------------------------------------------------
 
