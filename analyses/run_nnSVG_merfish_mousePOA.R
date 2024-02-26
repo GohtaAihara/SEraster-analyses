@@ -28,7 +28,9 @@ dataset_name <- "merfish_mousePOA"
 
 # Load dataset ------------------------------------------------------------
 
-data <- read.csv('~/Downloads/lab/data/merfish_mousePOA_all_cells.csv')
+# data <- read.csv('~/Downloads/lab/data/merfish_mousePOA_all_cells.csv')
+
+data <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/MERFISH_mousePOA/merfish_mousePOA_all_cells.csv')
 
 animal <- 1
 sex <- "Female"
@@ -40,6 +42,12 @@ sexes <- unique(data$Animal_sex)
 bregmas <- unique(data$Bregma)
 
 count = 0
+
+## set BiocParallel parameters
+# the number of workers is set to be the number of physical cores
+# bpparam <- BiocParallel::MulticoreParam()
+# bpparam <- BiocParallel::MulticoreParam(workers = parallel::detectCores(logical = FALSE))
+bpparam <- BiocParallel::MulticoreParam(workers = 10)
 
 #run on mac studio
 for (animal in animals) {
@@ -71,11 +79,6 @@ for (animal in animals) {
         n_rotation <- 10 # use 10 for the actual figure!
         angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
         
-        ## set BiocParallel parameters
-        # the number of workers is set to be the number of physical cores
-        bpparam <- BiocParallel::MulticoreParam()
-        # bpparam <- BiocParallel::MulticoreParam(workers = parallel::detectCores(logical = FALSE))
-        
         nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
           print(paste0("Resolution: ", res))
           if (res == "singlecell") {
@@ -103,17 +106,30 @@ for (animal in animals) {
               num_points = dim(spe_rast)[2]
               
               ## nnSVG (might want to use try(), see "run_nnSVG_nnSVG_simulations.R")
-              spe_rast <- nnSVG::nnSVG(
-                spe_rast,
-                assay_name = "pixelval",
-                BPPARAM = bpparam
-              )
-              temp <- rownames_to_column(as.data.frame(rowData(spe_rast)), var = "gene")
-              temp <- cbind(rotation_deg = deg, num_points = num_points, temp)
-              return(temp)
+              spe_rast <- try({
+                nnSVG::nnSVG(
+                  spe_rast,
+                  assay_name = "pixelval",
+                  BPPARAM = bpparam
+                )
+              })
+              if (class(spe_rast) == "try-error") {
+                ## do not save anything for clusters that caused error in nnSVG
+                return(NULL)
+                
+              } else {
+                temp <- rownames_to_column(as.data.frame(rowData(spe_rast)), var = "gene")
+                temp <- cbind(rotation_deg = deg, num_points = num_points, temp)
+                return(temp)
+              }
             }))
           }
-          return(data.frame(dataset = dataset_name, resolution = res, df))
+          if (is.null(df)) {
+            print(paste0("All rotations for resolution ", res, " failed"))
+            return(NULL)
+          } else {
+            return(data.frame(dataset = dataset_name, resolution = res, df))
+          }
         }))
         saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
       }
@@ -123,7 +139,6 @@ for (animal in animals) {
 
 # Plot --------------------------------------------------------------------
 
-#run on mac studio? 
 for (animal in animals) {
   for (sex in sexes) {
     for (bregma in bregmas) {
