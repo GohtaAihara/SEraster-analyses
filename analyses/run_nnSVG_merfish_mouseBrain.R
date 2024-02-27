@@ -1525,7 +1525,7 @@ df_rast <- df_rast[df_rast$resolution != "singlecell",]
 res_list <- list(50, 100, 200, 400)
 
 # set metrics
-metrics <- c("TPR", "TNR", "PPV")
+metrics <- c("TP", "FP", "TN", "FN", "TPR", "TNR", "PPV")
 
 # compute performance metrics
 # SEraster (permutation based on rotation)
@@ -1601,23 +1601,41 @@ for (metric in metrics) {
     summarize(mean = mean(values), sd = sd(values))
   
   # plot
-  set.seed(0)
-  ggplot(df, aes(x = resolution, y = values, col = method)) +
-    geom_jitter(width = 10, alpha = 0.3, size = 2, stroke = 0) +
-    geom_line(data = df_summary, aes(x = resolution, y = mean, col = method)) +
-    geom_point(data = df_summary, aes(x = resolution, y = mean, col = method), size = 1) +
-    geom_errorbar(data = df_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = method), width = 10) +
-    scale_x_continuous(breaks = unique(df$resolution)) +
-    ylim(0,1) +
-    labs(title = metric,
-         x = "Rasterization Resolution",
-         y = "Performance",
-         col = "Sampling Method") +
-    theme_bw()
+  if (metric %in% c("TP", "FP", "TN", "FN")) {
+    set.seed(0)
+    ggplot(df, aes(x = resolution, y = values, col = method)) +
+      geom_jitter(width = 10, alpha = 0.3, size = 2, stroke = 0) +
+      geom_line(data = df_summary, aes(x = resolution, y = mean, col = method)) +
+      geom_point(data = df_summary, aes(x = resolution, y = mean, col = method), size = 1) +
+      geom_errorbar(data = df_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = method), width = 10) +
+      scale_x_continuous(breaks = unique(df$resolution)) +
+      labs(title = metric,
+           x = "Rasterization Resolution",
+           y = "Performance",
+           col = "Sampling Method") +
+      theme_bw()
+  } else {
+    set.seed(0)
+    ggplot(df, aes(x = resolution, y = values, col = method)) +
+      geom_jitter(width = 10, alpha = 0.3, size = 2, stroke = 0) +
+      geom_line(data = df_summary, aes(x = resolution, y = mean, col = method)) +
+      geom_point(data = df_summary, aes(x = resolution, y = mean, col = method), size = 1) +
+      geom_errorbar(data = df_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = method), width = 10) +
+      scale_x_continuous(breaks = unique(df$resolution)) +
+      ylim(0,1) +
+      labs(title = metric,
+           x = "Rasterization Resolution",
+           y = "Performance",
+           col = "Sampling Method") +
+      theme_bw()
+  }
   
   # save plot
-  ggsave(filename = here("plots", paste0(dataset_name, "_perf_comparison_across_sampling_methods_", metric, ".pdf")))
+  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_comparison_across_sampling_methods_", metric, ".pdf")))
 }
+
+## assess which genes contribute to the difference
+
 
 # Further exploration -----------------------------------------------------
 
