@@ -153,3 +153,63 @@ diff(range(spatialCoords(merfish_mousePOA)[,2]))
 ## for tutorials
 rastCt <- SEraster::rasterizeCellType(merfish_mousePOA, col_name = "celltype", resolution = 5000, verbose = TRUE)
 plotRaster(rastCt, assay_name = "pixelval", feature_name = "Inhibitory", name = "cell-type counts", option = "inferno")
+
+
+# Test memory on sfc_POLYGON ----------------------------------------------
+
+## merfish mousePOA
+# data("merfish_mousePOA")
+# spe <- merfish_mousePOA
+## merfish mouseBrain
+# spe <- readRDS(file = here("outputs", "merfish_mouseBrain_preprocessed.RDS"))
+## xenium mousePup
+spe <- readRDS(file = here("outputs", "xenium_mousePup_preprocessed.RDS"))
+
+# set parallelization backend
+bpparam <- BiocParallel::MulticoreParam()
+
+## run SEraster to rasterize
+resolution <- 100
+# square pixel
+rastGexp_sq <- SEraster::rasterizeGeneExpression(spe, resolution = resolution, BPPARAM = bpparam)
+dim(rastGexp_sq)
+# hexagonal pixel
+rastGexp_hx <- SEraster::rasterizeGeneExpression(spe, resolution = resolution, square = FALSE, BPPARAM = bpparam)
+dim(rastGexp_hx)
+
+## compute size of spe
+print(object.size(rastGexp_sq), units = "Mb")
+print(object.size(rastGexp_hx), units = "Mb")
+
+## extract sfc_POLYGON
+sq <- colData(rastGexp_sq)$geometry
+hx <- colData(rastGexp_hx)$geometry
+
+## compute size of sfc_POLYGON
+print(object.size(sq), units = "Kb")
+print(object.size(hx), units = "Kb")
+
+## compute size of one entry of sfc_POLYGON
+print(object.size(sq[1]), units = "Kb")
+print(object.size(hx[1]), units = "Kb")
+
+## compute size of one sfg
+print(object.size(sq[[1]]), units = "Kb")
+print(object.size(hx[[1]]), units = "Kb")
+
+## compute size of vertices matrix array
+print(object.size(sq[[1]][[1]]), units = "Kb")
+print(object.size(hx[[1]][[1]]), units = "Kb")
+
+## check the distribution
+df_sq <- do.call(rbind, lapply(seq(length(sq)), function(i) {
+  return = data.frame(size = object.size(sq[[i]]))
+}))
+rownames(df_sq) <- colnames(rastGexp_sq)
+unique(df_sq$size)
+
+df_hx <- do.call(rbind, lapply(seq(length(hx)), function(i) {
+  return = data.frame(size = object.size(hx[[i]]))
+}))
+rownames(df_hx) <- colnames(rastGexp_hx)
+unique(df_hx$size)
