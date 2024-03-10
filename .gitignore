@@ -49,3 +49,6 @@ po/*~
 rsconnect/
 .DS_Store
 outputs/xenium_mousePup_preprocessed.RDS
+
+# Virtual Environment
+venv/

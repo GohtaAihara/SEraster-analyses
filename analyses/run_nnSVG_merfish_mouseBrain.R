@@ -12,6 +12,7 @@ source("analyses/functions.R")
 
 library(SpatialExperiment)
 library(Matrix)
+library(BiocParallel)
 # library(sf)
 library(ggplot2)
 library(ggrastr)
@@ -23,6 +24,8 @@ library(dplyr)
 library(pryr)
 library(R.utils)
 library(Seurat)
+library(SpatialFeatureExperiment)
+library(Voyager)
 
 par(mfrow=c(1,1))
 
@@ -30,6 +33,7 @@ dataset_name <- "merfish_mouseBrain"
 
 # Load dataset ------------------------------------------------------------
 
+## Slice 2, Replicate 1
 spe <- readRDS(file = here("outputs", paste0(dataset_name, "_preprocessed.RDS")))
 
 plot(spatialCoords(spe), pch=".", asp=1)
@@ -37,51 +41,59 @@ plot(spatialCoords(spe), pch=".", asp=1)
 
 # Run method --------------------------------------------------------------
 
-res_list <- list("singlecell", 50, 100, 200, 400)
-res_list
-# res_list <- list(50, 100, 200, 400)
+## run nnSVG at single cell resolution
+spe <- nnSVG::nnSVG(
+  spe,
+  assay_name = "lognorm",
+  BPPARAM = BiocParallel::MulticoreParam()
+)
+nnsvg_results <- rownames_to_column(as.data.frame(rowData(spe)), var = "gene")
+nnsvg_results <- data.frame(dataset = dataset_name, resolution = "singlecell", rotation_deg = NA, num_points = dim(spe)[2], nnsvg_results)
+# save results
+saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_singlecell.RDS")))
 
-## Run nnSVG once for each resolution
-nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
-  print(paste0("Resolution: ", res))
-  if (res == "singlecell") {
-    num_points = dim(spe)[2]
-    
-    ## nnSVG
-    spe <- nnSVG::nnSVG(
-      spe,
-      assay_name = "lognorm",
-      BPPARAM = BiocParallel::MulticoreParam()
-    )
-    df <- tibble::rownames_to_column(as.data.frame(rowData(spe)), var = "gene")
-  } else {
-    ## rasterization
-    spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
-    num_points = dim(spe_rast)[2]
-    
-    ## nnSVG
-    spe_rast <- nnSVG::nnSVG(
-      spe_rast,
-      assay_name = "pixelval",
-      BPPARAM = BiocParallel::MulticoreParam()
-    )
-    df <- tibble::rownames_to_column(as.data.frame(rowData(spe_rast)), var = "gene")
-  }
-  return(data.frame(dataset = dataset_name, resolution = res, num_points = num_points, df))
-}))
-saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
+## run Moran's I (in Voyager) at single cell resolution (followed on instructions on https://pachterlab.github.io/voyager/articles/vig6_merfish.html)
+# convert SpatialExperiment (spe) object to SpatialFeatureExperiment (sfe) object
+sfe <- toSpatialFeatureExperiment(spe)
+# compute "nCounts" for each cell
+sfe$nCounts <- colSums(assay(sfe, "counts"))
+# plot geometry
+plotSpatialFeature(sfe, feature = "nCounts", colGeometryName = "centroids")
+# assign neighbors
+k <- 5
+system.time(
+  colGraph(sfe, "knn5") <- findSpatialNeighbors(sfe, method = "knearneigh",
+                                                dist_type = "idw", k = k,
+                                                style = "W")
+)
+# plot neighbors
+# plotColGraph(sfe, colGraphName = "knn5", colGeometryName = "centroids")
+# run Moran's I
+system.time(
+  sfe <- runMoransI(sfe, exprs_values = "lognorm", BPPARAM = MulticoreParam())
+)
+plotRowDataHistogram(sfe, feature = "moran_sample01")
+range(rowData(sfe)$moran_sample01)
+moransI_results <- rownames_to_column(as.data.frame(rowData(sfe)), var = "gene")
+moransI_results <- data.frame(dataset = dataset_name, resolution = "singlecell", rotation_deg = NA, num_points = dim(sfe)[2], moransI_results[,c("moran_sample01", "K_sample01")])
+# save results
+saveRDS(moransI_results, file = here("outputs", paste0(dataset_name, "_moransI_global_singlecell_k_", k, ".RDS")))
 
-## Rotate dataset, rasterize, run nnSVG for each resolution
+## Rotate dataset, rasterize, run nnSVG at specified rasterization resolution
+# set resolution parameters
 start_res <- 50
 end_res <- 400
 interval_res <- 10
-res_list <- c("singlecell", as.list(seq(start_res, end_res, by = interval_res)))
-# res_list <- c(as.list(seq(start_res, end_res, by = interval_res)))
+# res_list <- c("singlecell", as.list(seq(start_res, end_res, by = interval_res)))
+res_list <- seq(start_res, end_res, by = interval_res)
 res_list
 
+# set permutation parameters
 n_rotation <- 10
 angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
-# angle_deg_list <- c(216, 252, 288, 324)
+
+# set aggregation function ("mean" or "sum")
+fun <- "sum"
 
 nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
   print(paste0("Resolution: ", res))
@@ -105,7 +117,7 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
       )
       
       ## rasterization
-      spe_rast <- SEraster::rasterizeGeneExpression(spe_rotated, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
+      spe_rast <- SEraster::rasterizeGeneExpression(spe_rotated, assay_name = "lognorm", resolution = res, fun = fun, BPPARAM = BiocParallel::MulticoreParam())
       
       ## nnSVG
       ## using try() to handle error and withTimeout() to handle > 30 mins runtime
@@ -152,7 +164,7 @@ nnsvg_results <- do.call(rbind, lapply(res_list, function(res) {
   return(data.frame(dataset = dataset_name, resolution = res, df))
 }))
 # saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
-saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, "_", start_res, "-", end_res, "-by-", interval_res, ".RDS")))
+saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, "_", start_res, "-", end_res, "-by-", interval_res, "_fun_", fun, ".RDS")))
 
 ## Measure runtime for each resolution
 device <- "macbookpro"
@@ -199,207 +211,6 @@ runtime_results <- do.call(rbind, lapply(res_list, function(res) {
   return(data.frame(dataset = dataset_name, resolution = res, out))
 }))
 saveRDS(runtime_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_", device, ".RDS")))
-
-
-## Measure memory for each resolution (serial computing due to bench package)
-res_list <- list(100, 400)
-n_itr <- 2
-
-memory_results <- do.call(rbind, lapply(res_list, function(res) {
-  out <- do.call(rbind, lapply(seq(n_itr), function(i) {
-    print(paste0("Resolution: ", res, ", trial: ", i))
-    if (res == "singlecell") {
-      num_points = dim(spe)[2]
-      
-      mem <- bench::bench_memory(
-        nnSVG::nnSVG(
-          spe,
-          assay_name = "lognorm",
-          n_threads = 1
-        )
-      )
-      return(data.frame(trial = i, num_points = num_points, memory_rast = NA, memory_nnsvg = mem$mem_alloc, memory_total = mem$mem_alloc))
-    } else {
-      mem_rast <- bench::bench_memory(
-        spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", n_threads = 1)
-      )
-      
-      num_points = dim(spe_rast)[2]
-      
-      mem_nnsvg <- bench::bench_memory(
-        nnSVG::nnSVG(
-          spe_rast,
-          assay_name = "pixelval",
-          n_threads = 1
-        )
-      )
-      return(data.frame(trial = i, num_points = num_points, memory_rast = mem_rast$mem_alloc, memory_nnsvg = mem_nnsvg$mem_alloc, memory_total = mem_rast$mem_alloc + mem_nnsvg$mem_alloc))
-    }
-  }))
-  return(data.frame(dataset = dataset_name, resolution = res, out))
-}))
-saveRDS(memory_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_memory.RDS")))
-
-
-
-
-res <- c(100)
-spe_rast1 <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 100, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
-spe_rast2 <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 200, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
-
-memory_results <- bench::mark(
-  nnSVG::nnSVG(
-    spe_rast1,
-    assay_name = "pixelval",
-    n_threads = 1
-  ),
-  nnSVG::nnSVG(
-    spe_rast2,
-    assay_name = "pixelval",
-    n_threads = 1
-  )
-)
-
-x <- 1:1e6
-result <- bench::mark(
-  is.numeric(sqrt(x)),
-  is.numeric(x^2)
-)
-
-test <- bench::bench_memory(
-  spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 400, fun = "mean", BPPARAM = BiocParallel::MulticoreParam(workers = 1))
-  # sqrt(x)
-)
-
-test <- bench::bench_memory(
-  spe_rast <- SEraster::rasterizeSparseMatrix2(assay(spe, "lognorm"), spatialCoords(spe), resolution = 400, fun = "mean", n_threads = 22)
-)
-
-spe_rast <- SEraster::rasterizeSparseMatrix2(assay(spe, "lognorm"), spatialCoords(spe), resolution = 400, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
-spe_rast2 <- SEraster::rasterizeSparseMatrix2(assay(spe, "lognorm"), spatialCoords(spe), resolution = 400, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
-
-res <- 50
-test <- bench::mark(
-  class(SEraster::rasterizeSparseMatrix(assay(spe, "lognorm"), spatialCoords(spe), resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())),
-  class(SEraster::rasterizeSparseMatrix2(assay(spe, "lognorm"), spatialCoords(spe), resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())),
-  memory = FALSE
-)
-
-## test
-library(pryr)
-
-test <- mem_change(
-  nnSVG::nnSVG(
-    spe,
-    assay_name = "lognorm",
-    n_threads = 1
-  )
-)
-test
-
-data("merfish_mousePOA")
-
-start <- Sys.time()
-mem <- mem_change(
-  rast <- SEraster::rasterizeGeneExpression(merfish_mousePOA)
-)
-runtime <- difftime(Sys.time(), start, units = "secs")
-mem
-runtime
-rast
-
-mem_change(
-  nnSVG::nnSVG(
-    merfish_mousePOA,
-    assay_name = "volnorm",
-    n_threads = 1
-  )
-)
-
-library(profvis)
-profvis(
-  nnSVG::nnSVG(
-    merfish_mousePOA,
-    assay_name = "volnorm",
-    n_threads = 1
-  )
-)
-
-setwd("~/Desktop/SEraster")
-source("R/main.R")
-
-profvis(rasterizeGeneExpression(merfish_mousePOA))
-
-resolution = 100
-data <- assay(merfish_mousePOA)
-pos <- spatialCoords(merfish_mousePOA)
-bbox <- sf::st_bbox(c(
-  xmin = floor(min(pos[,1])-resolution/2), 
-  xmax = ceiling(max(pos[,1])+resolution/2), 
-  ymin = floor(min(pos[,2])-resolution/2), 
-  ymax = ceiling(max(pos[,2])+resolution/2)
-))
-
-profvis(rasterizeMatrix(data, pos, bbox))
-
-setwd("~/Desktop/SEraster-analyses/")
-
-## Measure runtime (Sys.time) and memory (pryr::mem_change)
-
-res_list <- list("singlecell", 50, 100, 200, 400)
-
-device <- "MacStudio"
-n_cores <- 1
-
-if (device == "MacStudio") {
-  bpparam <- BiocParallel::MulticoreParam(workers = n_cores)
-  bpparam
-}
-
-n_itr <- 5
-
-resource_results <- do.call(rbind, lapply(res_list, function(res) {
-  out <- do.call(rbind, lapply(seq(n_itr), function(i) {
-    print(paste0("Resolution: ", res, ", trial: ", i))
-    if (res == "singlecell") {
-      num_points = dim(spe)[2]
-      
-      start <- Sys.time()
-      mem <- mem_change(
-        spe <- nnSVG::nnSVG(
-          spe,
-          assay_name = "lognorm",
-          BPPARAM = bpparam
-        )
-      )
-      runtime <- difftime(Sys.time(), start, units = "secs")
-      return(data.frame(trial = i, num_points = num_points, runtime_rast = NA, runtime_nnsvg = runtime, runtime_total = runtime, mem_rast = NA, mem_nnsvg = mem, mem_total = mem))
-    } else {
-      start1 <- Sys.time()
-      mem_rast <- mem_change(
-        spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = res, fun = "mean", BPPARAM = bpparam)
-      )
-      runtime_rast <- difftime(Sys.time(), start1, units = "secs")
-      
-      num_points = dim(spe_rast)[2]
-      
-      start2 <- Sys.time()
-      mem_nnsvg <- mem_change(
-        spe_rast <- nnSVG::nnSVG(
-          spe_rast,
-          assay_name = "pixelval",
-          BPPARAM = bpparam
-        )
-      )
-      end <- Sys.time()
-      runtime_nnsvg <- difftime(end, start2, units = "secs")
-      runtime_total <- difftime(end, start1, units = "secs")
-      return(data.frame(trial = i, num_points = num_points, runtime_rast = runtime_rast, runtime_nnsvg = runtime_nnsvg, runtime_total = runtime_total, mem_rast = mem_rast, mem_nnsvg = mem_nnsvg, mem_total = mem_rast + mem_nnsvg))
-    }
-  }))
-  return(data.frame(dataset = dataset_name, resolution = res, out))
-}))
-saveRDS(resource_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_memory_", device, "_n=", n_itr, ".RDS")))
 
 ## compare the performance with other preprocessing methods (uniform sampling, geometric sketch)
 ## for each method, subset to the number of pixels for each resolution

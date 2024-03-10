@@ -1,3 +1,6 @@
+
+# Set up ------------------------------------------------------------------
+
 setwd("~/Desktop/SEraster")
 devtools::document()
 devtools::load_all()
@@ -5,6 +8,7 @@ devtools::load_all()
 setwd("~/Desktop/SEraster-analyses/")
 
 library(here)
+library(ggplot2)
 
 
 # Test plotting function in general --------------------------------------------------
@@ -213,3 +217,52 @@ df_hx <- do.call(rbind, lapply(seq(length(hx)), function(i) {
 }))
 rownames(df_hx) <- colnames(rastGexp_hx)
 unique(df_hx$size)
+
+
+# Test rotation -----------------------------------------------------------
+
+data("merfish_mousePOA")
+spe1 <- merfish_mousePOA
+spe2 <- readRDS(file = here("outputs", "merfish_mouseBrain_preprocessed.RDS"))
+
+ggplot(data.frame(spatialCoords(spe1)), aes(x = x, y = y)) +
+  coord_fixed() +
+  geom_point(size = 0.5, stroke = 0.01, alpha = 0.5) +
+  theme_bw()
+
+ggplot(data.frame(spatialCoords(spe2)), aes(x = x, y = y)) +
+  coord_fixed() +
+  geom_point(size = 0.5, stroke = 0.01, alpha = 0.5) +
+  theme_bw()
+
+# input = single SpatialExperiment
+spe_list <- permutateByRotation(spe2, n_perm = 3)
+names(spe_list)
+
+df_plt <- do.call(rbind, lapply(seq_along(spe_list), function(i) {
+  spe <- spe_list[[i]]
+  return(data.frame(spatialCoords(spe), perm = as.character(i)))
+}))
+
+ggplot() +
+  coord_fixed() +
+  geom_point(data = data.frame(spatialCoords(spe)), aes(x = x, y = y), color = "lightgray", size = 0.5, stroke = 0.01, alpha = 0.5) +
+  geom_point(data = df_plt, aes(x = x, y = y, col = perm, shape = perm), size = 0.5, stroke = 0.01, alpha = 0.5) +
+  theme_bw()
+
+# input = a list of SpatialExperiment objects
+spe_list_orig <- list(spe1, spe2)
+names(spe_list_orig) <- c("merfish_mousePOA", "merfish_mouseBrain")
+spe_list <- permutateByRotation(spe_list_orig, n_perm = 3)
+names(spe_list)
+
+df_plt <- do.call(rbind, lapply(seq_along(spe_list), function(i) {
+  spe <- spe_list[[i]]
+  name <- strsplit(names(spe_list)[i], "_rotated_", fixed = TRUE)
+  return(data.frame(spatialCoords(spe), dataset = name[[1]][1], angle = name[[1]][2], perm = as.character(i)))
+}))
+
+ggplot(df_plt, aes(x = x, y = y, col = angle, shape = dataset)) +
+  coord_fixed() +
+  geom_point(size = 0.5, stroke = 0.01, alpha = 0.5) +
+  theme_bw()
