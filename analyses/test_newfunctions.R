@@ -246,13 +246,31 @@ df_plt <- do.call(rbind, lapply(seq_along(spe_list), function(i) {
 
 ggplot() +
   coord_fixed() +
-  geom_point(data = data.frame(spatialCoords(spe)), aes(x = x, y = y), color = "lightgray", size = 0.5, stroke = 0.01, alpha = 0.5) +
   geom_point(data = df_plt, aes(x = x, y = y, col = perm, shape = perm), size = 0.5, stroke = 0.01, alpha = 0.5) +
   theme_bw()
 
 # input = a list of SpatialExperiment objects
 spe_list_orig <- list(spe1, spe2)
 names(spe_list_orig) <- c("merfish_mousePOA", "merfish_mouseBrain")
+# 
+# input <- spe_list_orig
+# pos_comb <- do.call(rbind, lapply(seq_along(input), function(i) {
+#   pos <- SpatialExperiment::spatialCoords(input[[i]])
+#   if (!is.null(names(input))) {
+#     dataset <- names(input)[i]
+#   } else {
+#     dataset <- i
+#   }
+#   return(data.frame(dataset = dataset, x = pos[,1], y = pos[,2]))
+# }))
+# ## find the midrange point across combined x,y coordinates
+# midrange_pt <- rearrr::midrange(pos_comb, cols = c("x", "y"))
+# message(paste0("Rotating all datasets around (x, y) = (", midrange_pt$x, ", ", midrange_pt$y, ")"))
+# 
+# pos_orig <- as.data.frame(spatialCoords(spe1))
+# angle <- 90
+# pos_rotated <- rearrr::rotate_2d(data = pos_orig, degrees = angle, x_col = "x", y_col = "y", origin = midrange_pt, overwrite = TRUE)
+
 spe_list <- permutateByRotation(spe_list_orig, n_perm = 3)
 names(spe_list)
 

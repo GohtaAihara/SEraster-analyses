@@ -19,6 +19,8 @@ library(here)
 
 par(mfrow=c(1,1))
 
+dataset_name <- "merfish_mouseBrain"
+
 # Load dataset ------------------------------------------------------------
 
 ## use OneDrive directory for now
@@ -107,6 +109,13 @@ spe <- SpatialExperiment::SpatialExperiment(
 )
 
 saveRDS(spe, file = "outputs/merfish_mouseBrain_preprocessed.RDS")
+
+
+# Output as csv files for Python codes ------------------------------------
+
+write.csv(as.matrix(gexp), here("outputs", paste0(dataset_name, "_counts.csv")))
+write.csv(as.matrix(gexp_lognorm), here("outputs", paste0(dataset_name, "_lognorm.csv")))
+write.csv(as.matrix(pos), here("outputs", paste0(dataset_name, "_pos.csv")))
 
 # Pipeline for various slices/replicates ------------------------------------------------------------
 
@@ -211,3 +220,4 @@ for (slice in slices) {
     saveRDS(spe, file = here("outputs", paste0(dataset_name, "_preprocessed.RDS")))
   }
 }
+
