@@ -358,6 +358,14 @@ nnsvg_results_uniform <- do.call(rbind, lapply(seq_along(res_list), function(i) 
 }))
 saveRDS(nnsvg_results_uniform, file = here("outputs", paste0(dataset_name, "_nnsvg_global_uniform_v2.RDS")))
 
+# SOMDE
+res <- 100
+counts_nodes <- read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_counts_nodes.csv")), row.names = 1)
+lognorm_nodes <- read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_lognorm_nodes.csv")), row.names = 1)
+pos_nodes <- read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_pos_nodes.csv")), row.names = 1)
+
+plot(pos_nodes)
+
 # Plot --------------------------------------------------------------------
 
 col_celltype <- gg_color_hue(length(levels(colData(spe)$celltype)))
