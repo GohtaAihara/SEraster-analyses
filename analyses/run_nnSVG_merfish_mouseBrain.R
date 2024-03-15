@@ -359,12 +359,53 @@ nnsvg_results_uniform <- do.call(rbind, lapply(seq_along(res_list), function(i) 
 saveRDS(nnsvg_results_uniform, file = here("outputs", paste0(dataset_name, "_nnsvg_global_uniform_v2.RDS")))
 
 # SOMDE
+# test
 res <- 100
 counts_nodes <- read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_counts_nodes.csv")), row.names = 1)
 lognorm_nodes <- read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_lognorm_nodes.csv")), row.names = 1)
 pos_nodes <- read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_pos_nodes.csv")), row.names = 1)
 
 plot(pos_nodes)
+
+res_list <- c(50, 100, 200, 400)
+
+nnsvg_results_somde <- do.call(rbind, lapply(res_list, function(res) {
+  print(paste0("Resolution: ", res))
+  
+  ## load SOMDE aggregated data
+  counts_nodes <- as.matrix(read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_counts_nodes.csv")), row.names = 1))
+  lognorm_nodes <- as.matrix(read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_lognorm_nodes.csv")), row.names = 1))
+  pos_nodes <- as.matrix(read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_pos_nodes.csv")), row.names = 1))
+  
+  ## format features-by-cells matrix into sparse matrix
+  counts_nodes <- as(counts_nodes, "CsparseMatrix")
+  lognorm_nodes <- as(lognorm_nodes, "CsparseMatrix")
+  
+  ## format into SpatialExperiment
+  spe_somde <- SpatialExperiment::SpatialExperiment(
+    assays = list(counts = counts_nodes, lognorm = lognorm_nodes),
+    spatialCoords = pos_nodes
+  )
+  
+  ## run nnSVG
+  spe_somde <- try({
+    nnSVG::nnSVG(
+      spe_somde,
+      assay_name = "lognorm",
+      BPPARAM = BiocParallel::MulticoreParam()
+    )
+  })
+  
+  if (class(spe_somde) == "try-error") {
+    ## do not save anything for clusters that caused error in nnSVG
+    return(NULL)
+  } else {
+    out <- rownames_to_column(as.data.frame(rowData(spe_somde)), var = "gene")
+    out <- cbind(seed = NA, num_points = dim(spe_somde)[2], out)
+    return(data.frame(dataset = dataset_name, resolution = res, method = "somde", out))
+  }
+}))
+saveRDS(nnsvg_results_somde, file = here("outputs", paste0(dataset_name, "_nnsvg_global_somde.RDS")))
 
 # Plot --------------------------------------------------------------------
 
@@ -1332,6 +1373,8 @@ df_rast <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_",
 df_sketch <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_geometric_sketching.RDS")))
 # load uniform sampling
 df_uniform <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_uniform.RDS")))
+# load somde
+df_somde <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_somde.RDS")))
 
 # set a threshold p value
 alpha <- 0.05
@@ -1407,8 +1450,25 @@ perf_uniform <- do.call(rbind, lapply(res_list, function(res) {
   }
 }))
 
+# somde (no permutation --> permutation = 1 for all)
+perf_somde <- do.call(rbind, lapply(res_list, function(res) {
+  # skip if the dataset does not contain this resolution
+  if (!res %in% unique(df_somde$resolution)) {
+    return(NULL)
+  } else {
+    print(paste0("SOMDE, Resolution = ", res))
+    
+    sampled <- df_somde[df_somde$resolution == res,]
+    results_sig <- do.call(rbind, lapply(sampled$gene, function(gene) {
+      return(data.frame(gene = gene, pred = sampled[sampled$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
+    }))
+    out <- calculatePerformanceMetrics(results_sig)
+    return(data.frame(method = "somde", resolution = res, permutation = 1, out))
+  }
+}))
+
 # combine
-perf_comb <- rbind(perf_rast, perf_sketch, perf_uniform)
+perf_comb <- rbind(perf_rast, perf_sketch, perf_uniform, perf_somde)
 
 for (metric in metrics) {
   print(paste0("Plotting ", metric))
