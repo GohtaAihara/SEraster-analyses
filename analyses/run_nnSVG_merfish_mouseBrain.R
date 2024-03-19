@@ -239,6 +239,8 @@ num_pixels <- do.call(rbind, lapply(unique(df$resolution), function(res) {
   }
 }))
 num_pixels
+# save as csv for running SOMDE on Python
+write.csv(num_pixels, here("outputs", paste0(dataset_name, "_num_pixels_", start_res, "-", end_res, "-by-", interval_res, ".csv")))
 
 seeds <- seq(1,10)
 
@@ -278,6 +280,9 @@ nnsvg_results_sketch <- do.call(rbind, lapply(seq_along(res_list), function(i) {
     stopifnot(identical(rownames(pos_sketch), colnames(gexp_sketch)))
     stopifnot(identical(rownames(meta_sketch), colnames(gexp_sketch)))
     
+    # save subsetted SpatialExperiment object
+    saveRDS(spe_sketch, here("outputs", paste0(dataset_name, "_spe_sketch_resolution_", res_list[[i]], "_seed_", seed, ".RDS")))
+    
     # perform nnSVG
     # using try() to handle error
     spe_sketch <- try({
@@ -306,7 +311,7 @@ nnsvg_results_sketch <- do.call(rbind, lapply(seq_along(res_list), function(i) {
   }
   
 }))
-saveRDS(nnsvg_results_sketch, file = here("outputs", paste0(dataset_name, "_nnsvg_global_geometric_sketching_v2.RDS")))
+saveRDS(nnsvg_results_sketch, file = here("outputs", paste0(dataset_name, "_nnsvg_global_geometric_sketching_", start_res, "-", end_res, "-by-", interval_res, ".RDS")))
 
 # uniform sampling
 nnsvg_results_uniform <- do.call(rbind, lapply(seq_along(res_list), function(i) {
@@ -327,6 +332,9 @@ nnsvg_results_uniform <- do.call(rbind, lapply(seq_along(res_list), function(i) 
     gexp_uniform <- assay(spe_uniform, "lognorm")
     stopifnot(identical(rownames(pos_uniform), colnames(gexp_uniform)))
     stopifnot(identical(rownames(meta_uniform), colnames(gexp_uniform)))
+    
+    # save subsetted SpatialExperiment object
+    saveRDS(spe_uniform, here("outputs", paste0(dataset_name, "_spe_uniform_resolution_", res_list[[i]], "_seed_", seed, ".RDS")))
     
     # perform nnSVG
     # using try() to handle error
@@ -356,26 +364,26 @@ nnsvg_results_uniform <- do.call(rbind, lapply(seq_along(res_list), function(i) 
   }
   
 }))
-saveRDS(nnsvg_results_uniform, file = here("outputs", paste0(dataset_name, "_nnsvg_global_uniform_v2.RDS")))
+saveRDS(nnsvg_results_uniform, file = here("outputs", paste0(dataset_name, "_nnsvg_global_uniform_", start_res, "-", end_res, "-by-", interval_res, ".RDS")))
 
 # SOMDE
-# test
-res <- 100
-counts_nodes <- read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_counts_nodes.csv")), row.names = 1)
-lognorm_nodes <- read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_lognorm_nodes.csv")), row.names = 1)
-pos_nodes <- read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_pos_nodes.csv")), row.names = 1)
+# # test
+# res <- 100
+# counts_nodes <- read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_counts_nodes.csv")), row.names = 1)
+# lognorm_nodes <- read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_lognorm_nodes.csv")), row.names = 1)
+# pos_nodes <- read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_pos_nodes.csv")), row.names = 1)
+# 
+# plot(pos_nodes)
+# 
+# res_list <- c(50, 100, 200, 400)
 
-plot(pos_nodes)
-
-res_list <- c(50, 100, 200, 400)
-
-nnsvg_results_somde <- do.call(rbind, lapply(res_list, function(res) {
-  print(paste0("Resolution: ", res))
+nnsvg_results_somde <- do.call(rbind, lapply(seq_along(res_list), function(i) {
+  print(paste0("Resolution: ", res_list[[i]]))
   
   ## load SOMDE aggregated data
-  counts_nodes <- as.matrix(read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_counts_nodes.csv")), row.names = 1))
-  lognorm_nodes <- as.matrix(read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_lognorm_nodes.csv")), row.names = 1))
-  pos_nodes <- as.matrix(read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res, "_pos_nodes.csv")), row.names = 1))
+  counts_nodes <- as.matrix(read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res_list[[i]], "_counts_nodes.csv")), row.names = 1))
+  lognorm_nodes <- as.matrix(read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res_list[[i]], "_lognorm_nodes.csv")), row.names = 1))
+  pos_nodes <- as.matrix(read.csv(file = here("outputs", paste0(dataset_name, "_resolution_", res_list[[i]], "_pos_nodes.csv")), row.names = 1))
   
   ## format features-by-cells matrix into sparse matrix
   counts_nodes <- as(counts_nodes, "CsparseMatrix")
@@ -386,6 +394,9 @@ nnsvg_results_somde <- do.call(rbind, lapply(res_list, function(res) {
     assays = list(counts = counts_nodes, lognorm = lognorm_nodes),
     spatialCoords = pos_nodes
   )
+  
+  # save subsetted SpatialExperiment object
+  saveRDS(spe_somde, here("outputs", paste0(dataset_name, "_spe_somde_resolution_", res_list[[i]], ".RDS")))
   
   ## run nnSVG
   spe_somde <- try({
@@ -402,10 +413,10 @@ nnsvg_results_somde <- do.call(rbind, lapply(res_list, function(res) {
   } else {
     out <- rownames_to_column(as.data.frame(rowData(spe_somde)), var = "gene")
     out <- cbind(seed = NA, num_points = dim(spe_somde)[2], out)
-    return(data.frame(dataset = dataset_name, resolution = res, method = "somde", out))
+    return(data.frame(dataset = dataset_name, resolution = res_list[[i]], method = "somde", out))
   }
 }))
-saveRDS(nnsvg_results_somde, file = here("outputs", paste0(dataset_name, "_nnsvg_global_somde.RDS")))
+saveRDS(nnsvg_results_somde, file = here("outputs", paste0(dataset_name, "_nnsvg_global_somde_", start_res, "-", end_res, "-by-", interval_res, ".RDS")))
 
 # Plot --------------------------------------------------------------------
 

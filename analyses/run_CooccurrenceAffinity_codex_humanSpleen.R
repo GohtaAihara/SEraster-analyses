@@ -1,4 +1,4 @@
-## This file integrates rasterization with CooccurrenceAffinity to analyze 10X Genomics Xenium mouse whole pup datasets. Produce figures for 
+## This file integrates rasterization with CooccurrenceAffinity to analyze CODEX human spleen datasets. Produce figures for 
 
 # Set up ------------------------------------------------------------------
 
