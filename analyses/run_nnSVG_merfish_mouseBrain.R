@@ -1377,15 +1377,35 @@ ggplot(df, aes(x = resolution, y = num_points, col = resolution, label = num_poi
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_num_points.pdf")), width = 6, heigh = 5, dpi = 300)
 
 ## Supplementary Figure x (performance comparison between SEraster, geometric sketching, and uniform sampling)
-# load SEraster results
+# set resolution parameters
+start_res <- 50
+end_res <- 400
+interval_res <- 10
+res_list <- seq(start_res, end_res, by = interval_res)
+res_list
+
+# set permutation parameters
 n_rotation <- 10
-df_rast <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+
+# v1
+# # load SEraster results
+# df_rast <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+# # load geometric sketching
+# df_sketch <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_geometric_sketching.RDS")))
+# # load uniform sampling
+# df_uniform <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_uniform.RDS")))
+# # load somde
+# df_somde <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_somde.RDS")))
+
+# v2
+# load SEraster results
+df_rast <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, "_", start_res, "-", end_res, "-by-", interval_res, ".RDS")))
 # load geometric sketching
-df_sketch <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_geometric_sketching.RDS")))
+df_sketch <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_geometric_sketching_", start_res, "-", end_res, "-by-", interval_res, ".RDS")))
 # load uniform sampling
-df_uniform <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_uniform.RDS")))
+df_uniform <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_uniform_", start_res, "-", end_res, "-by-", interval_res, ".RDS")))
 # load somde
-df_somde <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_somde.RDS")))
+df_somde <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_somde_", start_res, "-", end_res, "-by-", interval_res, ".RDS")))
 
 # set a threshold p value
 alpha <- 0.05
@@ -1393,9 +1413,6 @@ alpha <- 0.05
 # extract single-cell data from SEraster results
 sc <- df_rast[df_rast$resolution == "singlecell",]
 df_rast <- df_rast[df_rast$resolution != "singlecell",]
-
-# set resolutions
-res_list <- list(50, 100, 200, 400)
 
 # set metrics
 metrics <- c("TP", "FP", "TN", "FN", "TPR", "TNR", "PPV")
@@ -1411,11 +1428,13 @@ perf_rast <- do.call(rbind, lapply(res_list, function(res) {
       deg <- unique(df_rast$rotation_deg)[i]
       print(paste0("SEraster, Resolution = ", res, ", Angle = ", deg))
       sampled <- df_rast[df_rast$resolution == res & df_rast$rotation_deg == deg,]
-      results_sig <- do.call(rbind, lapply(sampled$gene, function(gene) {
-        return(data.frame(gene = gene, pred = sampled[sampled$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
-      }))
-      out <- calculatePerformanceMetrics(results_sig)
-      return(data.frame(permutation = i, out))
+      if (nrow(sampled) > 0) {
+        results_sig <- do.call(rbind, lapply(sampled$gene, function(gene) {
+          return(data.frame(gene = gene, pred = sampled[sampled$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
+        }))
+        out <- calculatePerformanceMetrics(results_sig)
+        return(data.frame(permutation = i, out))
+      }
     }))
     return(data.frame(method = "SEraster", resolution = res, out))
   }
@@ -1431,11 +1450,13 @@ perf_sketch <- do.call(rbind, lapply(res_list, function(res) {
       seed <- unique(df_sketch$seed)[i]
       print(paste0("Geometric sketching, Resolution = ", res, ", Seed = ", seed))
       sampled <- df_sketch[df_sketch$resolution == res & df_sketch$seed == seed,]
-      results_sig <- do.call(rbind, lapply(sampled$gene, function(gene) {
-        return(data.frame(gene = gene, pred = sampled[sampled$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
-      }))
-      out <- calculatePerformanceMetrics(results_sig)
-      return(data.frame(permutation = i, out))
+      if (nrow(sampled) > 0) {
+        results_sig <- do.call(rbind, lapply(sampled$gene, function(gene) {
+          return(data.frame(gene = gene, pred = sampled[sampled$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
+        }))
+        out <- calculatePerformanceMetrics(results_sig)
+        return(data.frame(permutation = i, out))
+      }
     }))
     return(data.frame(method = "geometric_sketching", resolution = res, out))
   }
@@ -1451,11 +1472,13 @@ perf_uniform <- do.call(rbind, lapply(res_list, function(res) {
       seed <- unique(df_uniform$seed)[i]
       print(paste0("Uniform sampling, Resolution = ", res, ", Seed = ", seed))
       sampled <- df_uniform[df_uniform$resolution == res & df_uniform$seed == seed,]
-      results_sig <- do.call(rbind, lapply(sampled$gene, function(gene) {
-        return(data.frame(gene = gene, pred = sampled[sampled$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
-      }))
-      out <- calculatePerformanceMetrics(results_sig)
-      return(data.frame(permutation = i, out))
+      if (nrow(sampled) > 0) {
+        results_sig <- do.call(rbind, lapply(sampled$gene, function(gene) {
+          return(data.frame(gene = gene, pred = sampled[sampled$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
+        }))
+        out <- calculatePerformanceMetrics(results_sig)
+        return(data.frame(permutation = i, out))
+      }
     }))
     return(data.frame(method = "uniform", resolution = res, out))
   }
@@ -1494,11 +1517,11 @@ for (metric in metrics) {
   if (metric %in% c("TP", "FP", "TN", "FN")) {
     set.seed(0)
     ggplot(df, aes(x = resolution, y = values, col = method)) +
-      geom_jitter(width = 10, alpha = 0.3, size = 2, stroke = 0) +
+      geom_jitter(width = 5, alpha = 0.3, size = 2, stroke = 0) +
       geom_line(data = df_summary, aes(x = resolution, y = mean, col = method)) +
       geom_point(data = df_summary, aes(x = resolution, y = mean, col = method), size = 1) +
-      geom_errorbar(data = df_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = method), width = 10) +
-      scale_x_continuous(breaks = unique(df$resolution)) +
+      geom_errorbar(data = df_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = method), width = 5) +
+      # scale_x_continuous(breaks = unique(df$resolution)) +
       labs(title = metric,
            x = "Rasterization Resolution",
            y = "Performance",
@@ -1507,11 +1530,11 @@ for (metric in metrics) {
   } else {
     set.seed(0)
     ggplot(df, aes(x = resolution, y = values, col = method)) +
-      geom_jitter(width = 10, alpha = 0.3, size = 2, stroke = 0) +
+      geom_jitter(width = 5, alpha = 0.3, size = 2, stroke = 0) +
       geom_line(data = df_summary, aes(x = resolution, y = mean, col = method)) +
       geom_point(data = df_summary, aes(x = resolution, y = mean, col = method), size = 1) +
-      geom_errorbar(data = df_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = method), width = 10) +
-      scale_x_continuous(breaks = unique(df$resolution)) +
+      geom_errorbar(data = df_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = method), width = 5) +
+      # scale_x_continuous(breaks = unique(df$resolution)) +
       ylim(0,1) +
       labs(title = metric,
            x = "Rasterization Resolution",
@@ -1526,6 +1549,23 @@ for (metric in metrics) {
 
 ## assess which genes contribute to the difference
 
+## Supplementary Figure x (visualizations of SOMDE nodes)
+res_list <- c(50, 100, 200, 400)
+
+plt_list <- lapply(res_list, function(res) {
+  spe_somde <- readRDS(file = here("outputs", paste0(dataset_name, "_spe_somde_resolution_", res, ".RDS")))
+  
+  df <- data.frame(spatialCoords(spe_somde), gexp = colSums(assay(spe_somde, "lognorm")))
+  
+  ggplot() +
+    coord_fixed() +
+    geom_point(data = data.frame(spatialCoords(spe)), aes(x = x, y = y), color = "lightgray", size = 1, stroke = 0) +
+    geom_point(data = df, aes(x = x, y = y, col = gexp), size = 1, stroke = 0) +
+    scale_color_viridis_c() +
+    labs(col = "SOMDE node\n(lognorm)\ntotal gexp") +
+    theme_bw()
+  
+})
 
 # Further exploration -----------------------------------------------------
 
