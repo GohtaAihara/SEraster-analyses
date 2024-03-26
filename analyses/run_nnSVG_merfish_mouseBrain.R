@@ -60,7 +60,7 @@ sfe$nCounts <- colSums(assay(sfe, "counts"))
 # plot geometry
 plotSpatialFeature(sfe, feature = "nCounts", colGeometryName = "centroids")
 # assign neighbors
-k <- 5
+k <- 8
 system.time(
   colGraph(sfe, "knn5") <- findSpatialNeighbors(sfe, method = "knearneigh",
                                                 dist_type = "idw", k = k,
@@ -75,9 +75,51 @@ system.time(
 plotRowDataHistogram(sfe, feature = "moran_sample01")
 range(rowData(sfe)$moran_sample01)
 moransI_results <- rownames_to_column(as.data.frame(rowData(sfe)), var = "gene")
-moransI_results <- data.frame(dataset = dataset_name, resolution = "singlecell", rotation_deg = NA, num_points = dim(sfe)[2], moransI_results[,c("moran_sample01", "K_sample01")])
+moransI_results <- data.frame(dataset = dataset_name, resolution = "singlecell", rotation_deg = NA, num_points = dim(sfe)[2], moransI_results[,c("gene", "moran_sample01", "K_sample01")])
 # save results
 saveRDS(moransI_results, file = here("outputs", paste0(dataset_name, "_moransI_global_singlecell_k_", k, ".RDS")))
+
+## run Moran's I (in Voyager) at rasterized resolution (no permutation by rotation for now)
+# set resolution parameters
+res_list <- c(50, 100, 200, 400)
+
+# set permutation parameters
+n_perm <- 10
+
+# set aggregation function ("mean" or "sum")
+fun <- "mean"
+
+# set k for nearest neighbors
+k <- 8
+
+moransI_results <- do.call(rbind, lapply(res_list, function(res) {
+  # create permutations
+  spe_list <- SEraster::permutateByRotation(spe, n_perm = n_perm)
+  
+  # rasterization (all permutations)
+  spe_rast_list <- SEraster::rasterizeGeneExpression(spe_list, assay_name = "lognorm", resolution = res, fun = fun, BPPARAM = BiocParallel::MulticoreParam())
+  
+  out <- do.call(rbind, lapply(seq_along(spe_rast_list), function(i) {
+    # convert SpatialExperiment (spe) object to SpatialFeatureExperiment (sfe) object
+    sfe <- toSpatialFeatureExperiment(spe_rast_list[[i]])
+    # assign neighbors
+    system.time(
+      colGraph(sfe, "knn5") <- findSpatialNeighbors(sfe, method = "knearneigh",
+                                                    dist_type = "idw", k = k,
+                                                    style = "W")
+    )
+    # run Moran's I
+    system.time(
+      sfe <- runMoransI(sfe, exprs_values = "pixelval", BPPARAM = MulticoreParam())
+    )
+    # plotRowDataHistogram(sfe, feature = "moran_sample01")
+    range(rowData(sfe)$moran_sample01)
+    temp <- rownames_to_column(as.data.frame(rowData(sfe)), var = "gene")
+    return(data.frame(dataset = dataset_name, resolution = res, rotation_deg = as.numeric(sub("rotated_", "", names(spe_rast_list)[i])), num_points = dim(sfe)[2], temp[,c("gene", "moran_sample01", "K_sample01")]))
+  }))
+}))
+# save results
+saveRDS(moransI_results, file = here("outputs", paste0(dataset_name, "_moransI_global_seraster_n_perm_", n_perm, "_k_", k, ".RDS")))
 
 ## Rotate dataset, rasterize, run nnSVG at specified rasterization resolution
 # set resolution parameters
@@ -1042,7 +1084,7 @@ p4 <- ggplot(df_perf3, aes(x = resolution, y = FN, col = resolution_label)) +
        y = "FN") +
   theme_bw() +
   theme(legend.position = "none")
-grid.arrange(p1, p2, p3, p4, ncol = 2)
+gridExtra::grid.arrange(p1, p2, p3, p4, ncol = 2)
 
 # genes that contribute to the difference
 alpha <- 0.05
@@ -1050,7 +1092,7 @@ alpha <- 0.05
 svgs <- df[(df$resolution == "singlecell" & df$padj <= alpha),]$gene # 401
 non_svgs <- df[(df$resolution == "singlecell" & df$padj > alpha),]$gene # 82
 # label each gene as TP, TN, FP, FN
-df_perf4 <- df_sub %>%
+df_perf4 <- df %>%
   mutate(confusion_matrix = case_when(
     gene %in% svgs & padj <= alpha ~ "TP",
     gene %in% non_svgs & padj > alpha ~ "TN",
@@ -1066,9 +1108,186 @@ setdiff(test_svgs, svgs)
 test_non_svgs <- test[test$confusion_matrix %in% c("FP", "TN"),]$gene
 length(test_non_svgs)
 setdiff(test_non_svgs, non_svgs)
-# subset to relevant resolutions and permutations
 
+## identify "FP"
+# subset to specific permutation
+deg <- 0
+df_cfmat <- df_perf4[df_perf4$resolution != "singlecell" & df_perf4$rotation_deg == deg,]
+# venn diagram analysis
+x = list(
+  df_cfmat %>% filter(resolution == "50") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
+  df_cfmat %>% filter(resolution == "100") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
+  df_cfmat %>% filter(resolution == "200") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
+  df_cfmat %>% filter(resolution == "400") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname()
+)
+names(x) <- c("50", "100", "200", "400")
+v.table <- gplots::venn(x)
+# look at gene names for each intersection
+print(v.table)
+
+# across permutations
+# look at one resolution
+res <- 200
+df_cfmat <- df_perf4[df_perf4$resolution == res,]
+df_genes_fp <- do.call(rbind, lapply(unique(df_cfmat$rotation_deg), function(deg) {
+  genes <- df_cfmat %>% filter(rotation_deg == deg) %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname()
+  return(data.frame(rotation_deg = deg, gene = genes, presence = 1))
+}))
+# FP at only 200 um resolution
+df_cfmat <- df_perf4[df_perf4$resolution != "singlecell"]
+df_genes_fp <- do.call(rbind, lapply(unique(df_cfmat$rotation_deg), function(deg) {
+  # venn diagram analysis
+  x = list(
+    df_cfmat %>% filter(resolution == "50") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
+    df_cfmat %>% filter(resolution == "100") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
+    df_cfmat %>% filter(resolution == "200") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
+    df_cfmat %>% filter(resolution == "400") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname()
+  )
+  names(x) <- c("50", "100", "200", "400")
+  v.table <- gplots::venn(x)
+  # FP genes only at 200 um
+  genes <- attr(v.table, "intersections")$`200`
+  
+}))
+
+# find common genes (create model matrix of all genes --> find gene that is present in all permutations)
+mm_genes_fp <- pivot_wider(df_genes_fp, names_from = rotation_deg, values_from = presence, values_fill = list(presence = 0))
+mm_genes_fp <- column_to_rownames(mm_genes_fp, var = "gene")
+rownames(mm_genes_fp)[which(rowSums(mm_genes_fp) == 10)]
 ##WIP
+
+# rasterize for plotting
+spe_50 <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 50, fun = "mean", BPPARAM = MulticoreParam())
+spe_100 <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 100, fun = "mean", BPPARAM = MulticoreParam())
+spe_200 <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 200, fun = "mean", BPPARAM = MulticoreParam())
+spe_400 <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 400, fun = "mean", BPPARAM = MulticoreParam())
+
+spe_rasterized <- list(spe_50, spe_100, spe_200, spe_400)
+names(spe_rasterized) <- c("50", "100", "200", "400")
+
+# load Moran's I results
+k <- 8
+moransI_results_sc <- readRDS(file = here("outputs", paste0(dataset_name, "_moransI_global_singlecell_k_", k, ".RDS")))
+moransI_results_rast <- readRDS(file = here("outputs", paste0(dataset_name, "_moransI_global_seraster_n_perm_", n_perm, "_k_", k, ".RDS")))
+moransI_comb <- rbind(moransI_results_sc, moransI_results_rast)
+
+## evaluate different groups of genes
+# FP genes across all resolutions
+genes <- attr(v.table, "intersections")$`50:100:200:400`
+# FP genes only at 200 um
+genes <- attr(v.table, "intersections")$`200`
+
+# plot variance of nnSVG p-value
+df_plt <- df %>%
+  # filter(gene %in% genes)
+  group_by(resolution, gene) %>%
+  summarise(mean = mean(padj), var = var(padj)) %>%
+  mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400")))
+
+# plot variance of nnSVG LR stat
+df_plt <- df %>%
+  # filter(gene %in% genes) %>%
+  group_by(resolution, gene) %>%
+  summarise(mean = mean(LR_stat), var = var(LR_stat)) %>%
+  mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400")))
+
+# plot variance of Moran's I
+df_plt <- moransI_comb %>%
+  # filter(gene %in% genes) %>%
+  group_by(resolution, gene) %>%
+  summarise(mean = mean(moran_sample01), var = var(moran_sample01)) %>%
+  mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400")))
+
+ggplot(df_plt, aes(x = resolution, y = var, col = resolution)) +
+  geom_boxplot() +
+  theme_bw()
+
+# plot (nnSVG outputs)
+df_plt <- df %>%
+  filter(gene %in% genes) %>%
+  mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400")))
+
+# LR stat
+ggplot(df_plt, aes(x = gene, y = LR_stat, col = resolution)) +
+  geom_boxplot(position = position_dodge(0.75)) +
+  geom_jitter(position = position_dodge(0.75), alpha = 0.6) +
+  labs(x = "Genes",
+       y = "LR statistics",
+       col = "Resolution") +
+  theme_bw()
+
+# rank
+ggplot(df_plt, aes(x = gene, y = rank, col = resolution)) +
+  geom_boxplot(position = position_dodge(0.75)) +
+  geom_jitter(position = position_dodge(0.75), alpha = 0.6) +
+  labs(x = "Genes",
+       y = "rank",
+       col = "Resolution") +
+  theme_bw()
+
+# p-value
+ggplot(df_plt, aes(x = gene, y = -log10(padj), col = resolution)) +
+  geom_boxplot(position = position_dodge(0.75)) +
+  geom_jitter(position = position_dodge(0.75), alpha = 0.6) +
+  geom_hline(yintercept = -log10(alpha), linetype = "dashed", color = "black") +
+  labs(x = "Genes",
+       y = "-log10(adjusted p-value)",
+       col = "Resolution") +
+  theme_bw()
+
+# plot (moran's I)
+df_plt <- rbind(moransI_results_sc, moransI_results_rast) %>%
+  filter(gene %in% genes) %>%
+  mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400")))
+
+ggplot(df_plt, aes(x = gene, y = moran_sample01, col = resolution)) +
+  geom_boxplot(position = position_dodge(0.75)) +
+  geom_jitter(position = position_dodge(0.75), alpha = 0.6) +
+  labs(x = "Genes",
+       y = "Moran's I",
+       col = "Resolution") +
+  theme_bw()
+  
+# plot (gexp at single cell/rasterized resolutions)
+resolutions <- c("singlecell", "50", "100", "200", "400")
+for (gene in genes) {
+  plt_list <- lapply(resolutions, function(resolution) {
+    if (resolution == "singlecell") {
+      # construct data.frame for plotting
+      df <-data.frame(spatialCoords(spe), gexp = assay(spe, "lognorm")[gene,])
+      
+      # plot
+      plt <- ggplot(df, aes(x = x, y = y, col = gexp)) +
+        coord_fixed() +
+        geom_point(size = 0.5, stroke = 0) +
+        scale_color_gradient(low = 'lightgrey', high='red') + 
+        labs(title = c("single cell"),
+             col = "lognorm") +
+        theme_bw() +
+        theme(
+          panel.grid = element_blank(),
+          axis.title = ggplot2::element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank()
+        )
+      return(plt)
+    } else {
+      # get spe at specified resolution
+      spe_rast <- spe_rasterized[[resolution]]
+      
+      # plot
+      plt <- plotRaster(spe_rast, feature_name = gene, name = "pixel val", plotTitle = paste0(resolution, " um"))
+      return(plt)
+    }
+  })
+  
+  plt_comb <- gridExtra::grid.arrange(grobs = plt_list, top = gene)
+  ggsave(plt_comb, file = here("plots", dataset_name, paste0(dataset_name, "_gexp_", gene, ".png")), width = 15, height = 15, dpi = 300)
+}
+
+
+
+# plot FP genes found only in a specific resolution
 
 # what if we make the number of SVG and non-SVG the same? (balanced dataset)
 svgs <- df[(df$resolution == "singlecell" & df$padj <= 0.05),]$gene # 401
@@ -1557,15 +1776,20 @@ plt_list <- lapply(res_list, function(res) {
   
   df <- data.frame(spatialCoords(spe_somde), gexp = colSums(assay(spe_somde, "lognorm")))
   
-  ggplot() +
+  plt <- ggplot() +
     coord_fixed() +
     geom_point(data = data.frame(spatialCoords(spe)), aes(x = x, y = y), color = "lightgray", size = 1, stroke = 0) +
     geom_point(data = df, aes(x = x, y = y, col = gexp), size = 1, stroke = 0) +
     scale_color_viridis_c() +
-    labs(col = "SOMDE node\n(lognorm)\ntotal gexp") +
+    labs(title = paste0("resolution = ", res, "\nnumber of nodes = ", dim(df)[1]),
+         col = "SOMDE node\n(lognorm)\ntotal gexp") +
     theme_bw()
   
+  return(plt)
 })
+
+plt_comb <- gridExtra::grid.arrange(grobs = plt_list)
+ggsave(plt_comb, filename = here("plots", dataset_name, paste0(dataset_name, "_somde_node_visualizations.pdf")))
 
 # Further exploration -----------------------------------------------------
 
