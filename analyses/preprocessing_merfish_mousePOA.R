@@ -79,7 +79,7 @@ for (animal in animals) {
         colnames(mat) <- rownames(pos) <- rownames(meta) <- data_sub$Cell_ID
         
         ## filter genes with NaN values
-        bad_genes <- names(which(rowSums(is.nan(mat)) > 0))
+        bad_genes <- names(which(rowSums(is.nan(mat)) > 0)) 
         mat <- mat[setdiff(rownames(mat),bad_genes),]
         dim(mat)
         

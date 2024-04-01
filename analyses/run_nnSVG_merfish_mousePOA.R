@@ -28,9 +28,9 @@ dataset_name <- "merfish_mousePOA"
 
 # Load dataset ------------------------------------------------------------
 
-# data <- read.csv('~/Downloads/lab/data/merfish_mousePOA_all_cells.csv')
+data <- read.csv('~/Downloads/lab/data/merfish_mousePOA_all_cells.csv')
 
-data <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/MERFISH_mousePOA/merfish_mousePOA_all_cells.csv')
+#data <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/MERFISH_mousePOA/merfish_mousePOA_all_cells.csv')
 
 animal <- 1
 sex <- "Female"
@@ -180,69 +180,88 @@ spe_rast <- try({
 })
 
 # Plot --------------------------------------------------------------------
+#df <- readRDS(file = here("outputs", paste0(dataset_name, "_animal1", "_sex", sex, "_behavior", behavior, "_bregma_-0.19", "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+
+animal <- 1
+sex <- "Female"
+behavior <- "Naive"
+bregma <- "0.26"
+
+animals <- unique(data$Animal_ID)
+sexes <- unique(data$Animal_sex)
+bregmas <- unique(data$Bregma)
 
 for (animal in animals) {
   for (sex in sexes) {
     for (bregma in bregmas) {
-      if (file.exists(here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_preprocessed.RDS")))) {
-        ## Figure x (performance comparison)
-        n_rotation <- 1
-        angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
-        df <- readRDS(file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
-        # set a threshold p value
-        alpha <- 0.05
-        df_perf <- do.call(rbind, lapply(unique(df$resolution), function(res) {
-          if (res != "singlecell") {
-            sc <- df[df$resolution == "singlecell",]
-            out <- do.call(rbind, lapply(angle_deg_list, function(deg) {
-              rast <- df[df$resolution == res & df$rotation_deg == deg,]
-              results_sig <- do.call(rbind, lapply(rast$gene, function(gene) {
-                return(data.frame(gene = gene, pred = rast[rast$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
-              }))
-              out <- calculatePerformanceMetrics(results_sig)
-              return(data.frame(rotation_deg = deg, out))
+      if (file.exists(here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_nnsvg_global_n_rotation_10", ".RDS")))) {
+          ## Figure x (performance comparison)
+          n_rotation <- 10
+          angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
+          df <- readRDS(file = here("outputs", paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_nnsvg_global_n_rotation_10", ".RDS")))
+          # set a threshold p value
+          alpha <- 0.05
+          if ("singlecell" %in% unique(df$resolution)) {
+            df_perf <- do.call(rbind, lapply(unique(df$resolution), function(res) {
+              df_sub <- df[df$resolution == res,]
+              if (res != "singlecell") {
+                sc <- df[df$resolution == "singlecell",]
+                out <- do.call(rbind, lapply(unique(df_sub$rotation_deg), function(deg) {
+        
+                  rast <- df_sub[df_sub$rotation_deg == deg,]
+                  results_sig <- do.call(rbind, lapply(rast$gene, function(gene) {
+                    return(data.frame(gene = gene, pred = rast[rast$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
+                  }))
+                  out <- calculatePerformanceMetrics(results_sig)
+                  return(data.frame(rotation_deg = deg, out))
+                }))
+                return(data.frame(resolution = res, out))
+              }
             }))
-            return(data.frame(resolution = res, out))
+            
+            df_perf_raw <- df_perf %>%
+              mutate(resolution = as.numeric(resolution)) %>%
+              select(resolution, rotation_deg, TPR, TNR, PPV) %>%
+              pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values")
+            
+            df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
+              out <- do.call(rbind, lapply(c("TPR", "TNR", "PPV"), function(metric) {
+                
+                temp <- df_perf[df_perf$resolution == res, metric]
+                return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
+              }))
+              return(data.frame(resolution = as.numeric(res), out))
+            }))
+            
+            df_perf2 <- df_perf %>%
+              mutate(resolution = as.numeric(resolution)) %>%
+              select(resolution, TPR, TNR, PPV) %>%
+              pivot_longer(!resolution, names_to = "metrics", values_to = "values")
+            
+            ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
+              geom_jitter(width = 10, alpha = 0.3) +
+              geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
+              geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
+              geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics), width = 10) +
+              scale_x_continuous(breaks = unique(df_perf2$resolution)) + 
+              ylim(0,1) +
+              labs(title = paste("mPOA Performance for", animal, sex, behavior, bregma),
+                   x = "Rasterization Resolution",
+                   y = "Performance",
+                   col = "Metric") +
+              theme_bw()
+            ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_perf_metric_summary.pdf")), width = 6, heigh = 5, dpi = 300)
+           
+          } else {
+              paste0("Datasets that didn't have sc resolution: ", dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma)
           }
-        }))
-        
-        df_perf_raw <- df_perf %>%
-          mutate(resolution = as.numeric(resolution)) %>%
-          select(resolution, rotation_deg, TPR, TNR, PPV) %>%
           
-          pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values")
-        
-        df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
-          out <- do.call(rbind, lapply(c("TPR", "TNR", "PPV"), function(metric) {
-              
-            temp <- df_perf[df_perf$resolution == res, metric]
-            return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
-          }))
-          return(data.frame(resolution = as.numeric(res), out))
-        }))
-        
-        df_perf2 <- df_perf %>%
-          mutate(resolution = as.numeric(resolution)) %>%
-          select(resolution, TPR, TNR, PPV) %>%
-          pivot_longer(!resolution, names_to = "metrics", values_to = "values")
-        
-        ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
-          geom_jitter(width = 10, alpha = 0.3) +
-          geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
-          geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
-          geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics), width = 10) +
-          scale_x_continuous(breaks = unique(df_perf2$resolution)) + 
-          ylim(0,1) +
-          labs(title = paste("mPOA Performance for", animal, sex, behavior, bregma),
-               x = "Rasterization Resolution",
-               y = "Performance",
-               col = "Metric") +
-          theme_bw()
-        ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_perf_metric_summary.pdf")), width = 6, heigh = 5, dpi = 300)
       }
     }
   }
 }
+  
+  
         
 ## visualize intersection of SVGs across different resolutions
 u_df <- data.frame(gene = df$gene,
@@ -261,31 +280,67 @@ upset_df <- data.frame(gene = sc_df$gene,
                    r200 = res_200$identified)
 
 upset(upset_df)
+intersect(sc_df, res_50)
 
 ## identify which genes + visualize their patterns
+# at 50um
+# Rgs5 - only FN
+# Avpr2 - only FP
 
-## plot single cell
-df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = assay(spe, "counts")[gene,])
-ggplot(df, aes(x = x, y = y, col = gene)) +
-  coord_fixed() +
-  geom_point(size = 1, stroke = 0) +
-  scale_color_viridis_c() +
-  theme_bw() +
-  theme(
-    legend.position="none",
-    panel.grid = element_blank(),
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-  )
-identified_sc <- u_df[u_df$resolution == "singlecell" & u_df$pval < 0.05, ]
+# plot different resolutions ----------------------------------------------
 
-# identified_200um <- upset_df[upset_df$resolution == 200 & upset_df$pval < 0.05, ]
-# not_identified_200um <- upset_df[upset_df$resolution == 200 & upset_df$pval > 0.05, ]
-# res_200um <- upset_df[upset_df$resolution == 200, ]
-# res_200um$pval <- ifelse(res_200um$pval < 0.05, 1, 0)
-# res_200um <- data.frame(as.list(res_200um))
+gene <- rownames(spe)
 
+df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = colSums(assay(spe, "lognorm")[gene,]))
+
+df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = (assay(spe, "lognorm")["Rgs5",]))
+
+plot_sc <- ggplot(df, aes(x = x, y = y, col = gene)) +
+      coord_fixed() +
+      geom_point(size = 1, stroke = 0) +
+      scale_color_viridis_c() +
+      theme_bw() +
+        theme(
+           #legend.position="none",
+           panel.grid = element_blank(),
+           axis.title = element_blank(),
+           axis.text = element_blank(),
+           axis.ticks = element_blank(),
+        )
+
+# 50 
+rastGexp50 <- SEraster::rasterizeGeneExpression(merfish_mousePOA, assay_name="volnorm", resolution = 50)
+rastGexp100 <- SEraster::rasterizeGeneExpression(merfish_mousePOA, assay_name="volnorm", resolution = 100)
+rastGexp200 <- SEraster::rasterizeGeneExpression(merfish_mousePOA, assay_name="volnorm", resolution = 200)
+
+only_FN_at_50 <- "Rgs5"
+
+# only FN at 50
+plot_50 <- SEraster::plotRaster(rastGexp50, feature_name = only_FN_at_50, name = only_FN_at_50)
+plot_100 <- SEraster::plotRaster(rastGexp100, feature_name = only_FN_at_50, name = only_FN_at_50)
+plot_200 <- SEraster::plotRaster(rastGexp200, feature_name = only_FN_at_50, name = only_FN_at_50)
+
+ggarrange(plot_sc, 
+          plot_50, 
+          plot_100, 
+          plot_200, 
+          labels = c("Single Cell", "50 um", "100 um", "200 um"), 
+          ncol = 2, 
+          nrow = 2) #,
+          #top = "Gene expression pattern of Rgs5 across resolutions")
+
+# only FP at 50
+SEraster::plotRaster(rastGexp50, feature_name = "Avpr2", name = "Avpr2")
+SEraster::plotRaster(rastGexp100, feature_name = "Avpr2", name = "Avpr2")
+SEraster::plotRaster(rastGexp200, feature_name = "Avpr2", name = "Avpr2")
+
+# only TP at 200 um
+SEraster::plotRaster(rastGexp50, feature_name = "Klf4", name = "Klf4")
+SEraster::plotRaster(rastGexp100, feature_name = "Klf4", name = "Klf4")
+SEraster::plotRaster(rastGexp200, feature_name = "Klf4", name = "Klf4")
+
+
+# plot performance for biological replicates ------------------------------
 
 
 # Questions ---------------------------------------------------------------
