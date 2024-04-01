@@ -45,7 +45,7 @@ for (donor in donors) {
       plot(pos)
       
       ## colData
-      coldata <- data_sub[,c("size", "array", "donor", "cell_type", "Neighborhood", "Community")]
+      coldata <- data_sub[,c("size", "array", "donor", "cell_type", "Neighborhood", "Community", "Tissue.Unit")]
       
       rownames(pos) <- rownames(coldata) <- paste0("cell", seq(dim(pos)[1]))
       
@@ -60,6 +60,45 @@ for (donor in donors) {
     }
   }
 }
+
+
+# temporary ---------------------------------------------------------------
+
+data <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/CODEX_humanIntestine/23_09_CODEX_HuBMAP_alldata_Dryad_merged.csv', row.names = 1)
+
+donor <- "B006"
+# tissue_location <- "Proximal Jejunum"
+tissue_location <- "Ascending"
+
+celltypes <- paste0(unique(data$Cell.Type), collapse = ", ")
+
+## subset to tissue array
+data_sub <- data[data$donor == donor & data$Tissue_location == tissue_location,]
+
+if (nrow(data_sub) > 0) {
+  ## SpatialCoordinates
+  # extract
+  pos <- data_sub[,c("Xcorr", "Ycorr")]
+  colnames(pos) <- c("x", "y")
+  # plot
+  plot(pos)
+  
+  ## colData
+  coldata <- data_sub[,c("array", "region", "donor", "Cell.Type", "Neighborhood", "Community", "Tissue.Unit")]
+  
+  rownames(pos) <- rownames(coldata) <- paste0("cell", seq(dim(pos)[1]))
+  
+  ## format into SpatialExperiment class
+  spe <- SpatialExperiment::SpatialExperiment(
+    spatialCoords = as.matrix(pos),
+    colData = coldata
+  )
+  
+  ## save
+  saveRDS(spe, file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_loc_", tissue_location, "_preprocessed.RDS")))
+}
+
+
 
 
 # Format into SpatialExperiment class ----------------------------------
