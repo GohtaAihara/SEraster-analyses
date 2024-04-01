@@ -23,9 +23,10 @@ dataset_name <- "codex_humanIntestine"
 # Load dataset ------------------------------------------------------------
 
 ## use OneDrive directory for now
-data <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/Hickey_Colon_CODEX/single_cells.csv.gz', row.names = 1)
+# data <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/Hickey_Colon_CODEX/single_cells.csv.gz', row.names = 1)
+data <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/CODEX_humanIntestine/23_09_CODEX_HuBMAP_alldata_Dryad_merged.csv', row.names = 1)
 
-donors <- c("B009", "B010", "B011", "B012")
+donors <- c("B004", "B005", "B006", "B008", "B009", "B010", "B011", "B012")
 tissue_locations <- c("Transverse", "Proximal Jejunum", "Duodenum", "Ascending", "Ileum", "Mid-jejunum", "Descending", "Descending - Sigmoid")
 
 for (donor in donors) {
@@ -33,8 +34,26 @@ for (donor in donors) {
     print(donor)
     print(tissue_location)
     
-    ## subset to tissue array
+    ## subset to specific donor and tissue_location
     data_sub <- data[data$donor == donor & data$Tissue_location == tissue_location,]
+    
+    ## some datasets extra regions, so only use the first region
+    if (length(unique(data_sub$region)) != 1) {
+      data_sub <- data_sub[data_sub$region == unique(data_sub$region)[1],]
+    }
+    
+    ## donor == "B009" datasets sometimes have two arrays "B009B" and "B009Bt" --> use "B009B" if this is the case
+    if (identical(unique(data_sub$array),c("B009B", "B009Bt"))) {
+      data_sub <- data_sub[data_sub$array == "B009B",]
+    }
+    
+    ## sanity check
+    if (length(unique(data_sub$array)) > 1) {
+      warning("Subsetted dataset contains more than 1 array elements")
+    }
+    if (length(unique(data_sub$region)) > 1) {
+      warning("Subsetted dataset contains more than 1 region elements")
+    }
     
     if (nrow(data_sub) > 0) {
       ## SpatialCoordinates
@@ -46,6 +65,7 @@ for (donor in donors) {
       
       ## colData
       coldata <- data_sub[,c("size", "array", "donor", "cell_type", "Neighborhood", "Community", "Tissue.Unit")]
+      coldata <- data_sub[,c("array", "donor", "Tissue_location", "Cell.Type", "Neighborhood", "Community")]
       
       rownames(pos) <- rownames(coldata) <- paste0("cell", seq(dim(pos)[1]))
       
