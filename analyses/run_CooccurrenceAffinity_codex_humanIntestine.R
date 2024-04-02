@@ -29,7 +29,14 @@ par(mfrow=c(1,1))
 dataset_name = "codex_humanIntestine"
 method = "CooccurrenceAffinity"
 
+<<<<<<< Updated upstream
 ct_labels <- factor(c("NK", "Enterocyte", "MUC1+ Enterocyte", "TA", "CD66+ Enterocyte", "Paneth", "Smooth muscle", "M1 Macrophage", "Goblet", "Neuroendocrine", "CD57+ Enterocyte", "Lymphatic", "CD8+ T", "DC", "M2 Macrophage", "B", "Neutrophil", "Endothelial", "Cycling TA", "Plasma", "CD4+ T cell", "Stroma", "Nerve", "ICC", "CD7+ Immune"))
+=======
+donors <- c("B004", "B005", "B006", "B008", "B009", "B010", "B011", "B012")
+tissue_locations <- c("Transverse", "Proximal Jejunum", "Duodenum", "Ascending", "Ileum", "Mid-jejunum", "Descending", "Descending - Sigmoid")
+celltype <- factor(c("NK", "Enterocyte", "MUC1+ Enterocyte", "TA", "CD66+ Enterocyte", "Paneth", "Smooth muscle", "M1 Macrophage", "Goblet", "Neuroendocrine", "CD57+ Enterocyte", "Lymphatic", "CD8+ T", "DC", "M2 Macrophage", "B", "Neutrophil", "Endothelial", "Cycling TA", "Plasma", "CD4+ T cell", "Stroma", "Nerve", "ICC", "CD7+ Immune"))
+
+>>>>>>> Stashed changes
 
 # Load dataset ------------------------------------------------------------
 # 
@@ -39,11 +46,16 @@ ct_labels <- factor(c("NK", "Enterocyte", "MUC1+ Enterocyte", "TA", "CD66+ Enter
 # donor <- donors[[1]]
 # tissue_location <- tissue_locations[[1]]
 
+<<<<<<< Updated upstream
 ## "CL" dataset in Fig. 3
+=======
+## "CL" dataset in Fig. 3 of the original paper
+>>>>>>> Stashed changes
 donor <- "B006"
 tissue_location <- "Ascending"
 spe <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_loc_", tissue_location, "_preprocessed.RDS")))
 
+<<<<<<< Updated upstream
 # Run methods -------------------------------------------------------------
 
 ## set resolution parameters
@@ -122,10 +134,20 @@ for (res in res_list) {
   ## save results
   saveRDS(affinity_results, file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
 }
+=======
+## "SB" dataset in Fig. 3 of the original paper
+donor <- "B005"
+tissue_location <- "Proximal Jejunum"
+spe <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_loc_", tissue_location, "_preprocessed.RDS")))
+
+# Run methods -------------------------------------------------------------
+
+>>>>>>> Stashed changes
 
 
 # Plot --------------------------------------------------------------------
 
+<<<<<<< Updated upstream
 ## single cell visualizations
 col_clu <- gg_color_hue(length(levels(ct_labels)))
 names(col_clu) <- levels(ct_labels)
@@ -436,3 +458,28 @@ ComplexHeatmap::Heatmap(
   row_title = "Niches",
   column_title = "Tissue Unit"
 )
+=======
+col_celltype <- gg_color_hue(length(levels(celltype)))
+names(col_celltype) <- levels(celltype)
+
+for (donor in donors) {
+  for (tissue_location in tissue_locations) {
+    spe <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_loc_", tissue_location, "_preprocessed.RDS")))
+    df <- data.frame(spatialCoords(spe), celltype = colData(spe)$Cell.Type)
+    ggplot(df, aes(x = x, y = y, col = celltype)) +
+      coord_fixed() +
+      geom_point(size = 0.5, stroke = 0) +
+      scale_color_manual(name = "Cell type", values = col_celltype) +
+      guides(col = guide_legend(override.aes = list(size = 3))) +
+      labs(title = paste0("Donor: ", donor, ", Tissue: ", tissue_location)) +
+      theme_bw() +
+      theme(
+        panel.grid = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+      )
+    ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_sc_ct_donor_", donor, "_tissue_", tissue_location, ".pdf")))
+  }
+}
+>>>>>>> Stashed changes
