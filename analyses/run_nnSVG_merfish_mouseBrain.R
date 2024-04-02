@@ -1007,23 +1007,15 @@ df_perf <- do.call(rbind, lapply(unique(df$resolution), function(res) {
   }
 }))
 
-df_perf_raw <- df_perf %>%
-  mutate(resolution = as.numeric(resolution)) %>%
-  select(resolution, rotation_deg, TPR, TNR, PPV) %>%
-  pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values")
-
-df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
-  out <- do.call(rbind, lapply(c("TPR", "TNR", "PPV"), function(metric) {
-    temp <- df_perf[df_perf$resolution == res, metric]
-    return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
-  }))
-  return(data.frame(resolution = as.numeric(res), out))
-}))
-
 df_perf2 <- df_perf %>%
-  mutate(resolution = as.numeric(resolution)) %>%
   select(resolution, TPR, TNR, PPV) %>%
-  pivot_longer(!resolution, names_to = "metrics", values_to = "values")
+  pivot_longer(!resolution, names_to = "metrics", values_to = "values") %>%
+  mutate(resolution = as.numeric(resolution))
+
+df_perf_summary <- df_perf2 %>%
+  group_by(resolution, metrics) %>%
+  summarise(mean = mean(values), sd = sd(values)) %>%
+  mutate(resolution = as.numeric(resolution))
 
 set.seed(0)
 ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
@@ -1519,10 +1511,10 @@ df_perf <- do.call(rbind, lapply(unique(df_selected$resolution), function(res) {
   }
 }))
 
-df_perf_raw <- df_perf %>%
-  mutate(resolution = as.numeric(resolution)) %>%
-  select(resolution, rotation_deg, TPR, TNR, PPV) %>%
-  pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values")
+# df_perf_raw <- df_perf %>%
+#   mutate(resolution = as.numeric(resolution)) %>%
+#   select(resolution, rotation_deg, TPR, TNR, PPV) %>%
+#   pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values")
 
 df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
   out <- do.call(rbind, lapply(c("TPR", "TNR", "PPV"), function(metric) {
