@@ -1,4 +1,4 @@
-## This file integrates rasterization with nnSVG to analyze MERFISH mouse whole brain coronal section datasets.
+## This file integrates rasterization with nnSVG to analyze MERFISH mPOA datasets.
 
 # Set up ------------------------------------------------------------------
 
@@ -191,6 +191,10 @@ animals <- unique(data$Animal_ID)
 sexes <- unique(data$Animal_sex)
 bregmas <- unique(data$Bregma)
 
+df_perf_all <- data.frame()
+df_perf_all2 <- data.frame()
+ 
+# there are 83 unique conditions       
 for (animal in animals) {
   for (sex in sexes) {
     for (bregma in bregmas) {
@@ -207,7 +211,6 @@ for (animal in animals) {
               if (res != "singlecell") {
                 sc <- df[df$resolution == "singlecell",]
                 out <- do.call(rbind, lapply(unique(df_sub$rotation_deg), function(deg) {
-        
                   rast <- df_sub[df_sub$rotation_deg == deg,]
                   results_sig <- do.call(rbind, lapply(rast$gene, function(gene) {
                     return(data.frame(gene = gene, pred = rast[rast$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
@@ -226,31 +229,57 @@ for (animal in animals) {
             
             df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
               out <- do.call(rbind, lapply(c("TPR", "TNR", "PPV"), function(metric) {
-                
                 temp <- df_perf[df_perf$resolution == res, metric]
                 return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
               }))
               return(data.frame(resolution = as.numeric(res), out))
             }))
             
+            #df_perf_all <- do.call(rbind, df_perf_summary)
+            df_perf_all <- rbind(df_perf_all, df_perf_summary)
+            
             df_perf2 <- df_perf %>%
               mutate(resolution = as.numeric(resolution)) %>%
               select(resolution, TPR, TNR, PPV) %>%
               pivot_longer(!resolution, names_to = "metrics", values_to = "values")
             
+            #df_perf_all2 <- do.call(rbind, df_perf2)
+            df_perf_all2 <- rbind(df_perf_all2, df_perf2)
+            #df_perf_all2 <-df_perf %>%
+              # mutate(resolution = as.numeric(resolution)) %>%
+              # select(resolution, TPR, TNR, PPV) %>%
+              # pivot_longer(!resolution, names_to = "metrics", values_to = "values")
+            
             ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
-              geom_jitter(width = 10, alpha = 0.3) +
+              geom_jitter(width = 10, alpha = 0.3, size = 2, stroke = 0) +
               geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
               geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
               geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics), width = 10) +
               scale_x_continuous(breaks = unique(df_perf2$resolution)) + 
               ylim(0,1) +
-              labs(title = paste("mPOA Performance for", animal, sex, behavior, bregma),
+              labs(title = "Performance",
                    x = "Rasterization Resolution",
                    y = "Performance",
                    col = "Metric") +
               theme_bw()
-            ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_perf_metric_summary.pdf")), width = 6, heigh = 5, dpi = 300)
+            
+           
+            #ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary.pdf")), width = 6, heigh = 5, dpi = 300)
+            
+            
+            # ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
+            #   geom_jitter(width = 10, alpha = 0.3) +
+            #   geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
+            #   geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
+            #   geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics), width = 10) +
+            #   scale_x_continuous(breaks = unique(df_perf2$resolution)) + 
+            #   ylim(0,1) +
+            #   labs(title = paste("mPOA Performance for", animal, sex, behavior, bregma),
+            #        x = "Rasterization Resolution",
+            #        y = "Performance",
+            #        col = "Metric") +
+            #   theme_bw()
+            # ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma, "_perf_metric_summary.pdf")), width = 6, heigh = 5, dpi = 300)
            
           } else {
               paste0("Datasets that didn't have sc resolution: ", dataset_name, "_animal", animal, "_sex", sex, "_behavior", behavior, "_bregma", bregma)
@@ -261,8 +290,92 @@ for (animal in animals) {
   }
 }
   
-  
+df_perf_all <- na.omit(df_perf_all)
+#df_perf_all2 <- na.omit(df_perf_all2)
+
+df_perf_all2
+df_50TPR2 <- df_perf_all2[df_perf_all2$resolution == 50 & df_perf_all2$metrics == "TPR", ]
+
+# 50TPR ######
+df_50TPR <- df_perf_all[df_perf_all$resolution == 50 & df_perf_all$metrics == "TPR", ]
+mean_50TPR <- mean(df_50TPR$mean)
+sd_50TPR <- sd(df_50TPR$mean)
+
+# 50TNR
+df_50TNR <- df_perf_all[df_perf_all$resolution == 50 & df_perf_all$metrics == "TNR", ]
+mean_50TNR <- mean(df_50TNR$mean)
+sd_50TNR <- sd(df_50TNR$mean)
+
+# 50PPV 
+df_50PPV <- df_perf_all[df_perf_all$resolution == 50 & df_perf_all$metrics == "PPV", ]
+mean_50PPV <- mean(df_50PPV$mean)
+sd_50PPV <- sd(df_50PPV$mean)
+
+# 100TPR #####
+df_100TPR <- df_perf_all[df_perf_all$resolution == 100 & df_perf_all$metrics == "TPR", ]
+mean_100TPR <- mean(df_100TPR$mean)
+sd_100TPR <- sd(df_100TPR$mean)
+
+# 100TPR
+df_100TNR <- df_perf_all[df_perf_all$resolution == 100 & df_perf_all$metrics == "TNR", ]
+mean_100TNR <- mean(df_100TNR$mean)
+sd_100TNR <- sd(df_100TNR$mean)
+
+# 100PPV 
+df_100PPV <- df_perf_all[df_perf_all$resolution == 100 & df_perf_all$metrics == "PPV", ]
+mean_100PPV <- mean(df_100PPV$mean)
+sd_100PPV <- sd(df_100PPV$mean)
+
+# 200TPR #####
+df_200TPR <- df_perf_all[df_perf_all$resolution == 200 & df_perf_all$metrics == "TPR", ]
+mean_200TPR <- mean(df_200TPR$mean)
+sd_200TPR <- sd(df_200TPR$mean)
+
+# 200TPR
+df_200TNR <- df_perf_all[df_perf_all$resolution == 200 & df_perf_all$metrics == "TNR", ]
+mean_200TNR <- mean(df_200TNR$mean)
+sd_200TNR <- sd(df_200TNR$mean)
+
+# 200PPV 
+df_200PPV <- df_perf_all[df_perf_all$resolution == 200 & df_perf_all$metrics == "PPV", ]
+mean_200PPV <- mean(df_200PPV$mean)
+sd_200PPV <- sd(df_200PPV$mean)
+
+# combine performance for biological replicates
+df_perf_all_summary <- data.frame(
+                resolution = c(50, 50, 50, 100, 100, 100, 200, 200, 200),
+                metrics = c("TPR", "TNR", "PPV", "TPR", "TNR", "PPV", "TPR", "TNR", "PPV"),
+                mean = c(mean_50TPR, mean_50TNR, mean_50PPV, 
+                         mean_100TPR, mean_100TNR, mean_100PPV,
+                         mean_200TPR, mean_200TNR, mean_200PPV),
+                sd = c(sd_50TPR, sd_50TNR, sd_50PPV, 
+                       sd_100TPR, sd_100TNR, sd_100PPV,
+                       sd_200TPR, sd_200TNR, sd_200PPV))
+
+# df_perf_all_summary <- df_perf_all %>%
+#   group_by(resolution, metrics) %>%
+#   summarise(mean = mean(mean), sd = sd(mean))
+
+## plot all biological replicate results
+# df_perf2 is not the correct df
+ggplot(df_perf_all, aes(x = resolution, y = mean, col = metrics)) +
+  geom_jitter(width = 10, alpha = 0.3, size = 2, stroke = 0) +
+  geom_line(data = df_perf_all_summary, aes(x = resolution, y = mean, col = metrics)) +
+  geom_point(data = df_perf_all_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
+  geom_errorbar(data = df_perf_all_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics), width = 10) +
+  scale_x_continuous(breaks = unique(df_perf_all$resolution)) + 
+  ylim(0,1) +
+  labs(title = "Performance",
+       x = "Rasterization Resolution",
+       y = "Performance",
+       col = "Metric") +
+  theme_bw()
         
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "biological_replicates_perf_metric_summary.pdf")), width = 6, heigh = 5, dpi = 300)
+
+
+# upset plot --------------------------------------------------------------
+
 ## visualize intersection of SVGs across different resolutions
 u_df <- data.frame(gene = df$gene,
                        resolution = df$resolution, 
