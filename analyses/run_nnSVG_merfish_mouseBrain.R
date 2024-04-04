@@ -1007,23 +1007,15 @@ df_perf <- do.call(rbind, lapply(unique(df$resolution), function(res) {
   }
 }))
 
-df_perf_raw <- df_perf %>%
-  mutate(resolution = as.numeric(resolution)) %>%
-  select(resolution, rotation_deg, TPR, TNR, PPV) %>%
-  pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values")
-
-df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
-  out <- do.call(rbind, lapply(c("TPR", "TNR", "PPV"), function(metric) {
-    temp <- df_perf[df_perf$resolution == res, metric]
-    return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
-  }))
-  return(data.frame(resolution = as.numeric(res), out))
-}))
-
 df_perf2 <- df_perf %>%
-  mutate(resolution = as.numeric(resolution)) %>%
   select(resolution, TPR, TNR, PPV) %>%
-  pivot_longer(!resolution, names_to = "metrics", values_to = "values")
+  pivot_longer(!resolution, names_to = "metrics", values_to = "values") %>%
+  mutate(resolution = as.numeric(resolution))
+
+df_perf_summary <- df_perf2 %>%
+  group_by(resolution, metrics) %>%
+  summarise(mean = mean(values), sd = sd(values)) %>%
+  mutate(resolution = as.numeric(resolution))
 
 set.seed(0)
 ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
@@ -1134,27 +1126,29 @@ df_genes_fp <- do.call(rbind, lapply(unique(df_cfmat$rotation_deg), function(deg
   return(data.frame(rotation_deg = deg, gene = genes, presence = 1))
 }))
 # FP at only 200 um resolution
-df_cfmat <- df_perf4[df_perf4$resolution != "singlecell"]
+df_cfmat <- df_perf4[df_perf4$resolution != "singlecell",]
 df_genes_fp <- do.call(rbind, lapply(unique(df_cfmat$rotation_deg), function(deg) {
+  df_cfmmat_sub <- df_cfmat[df_cfmat$rotation_deg == deg,]
   # venn diagram analysis
   x = list(
-    df_cfmat %>% filter(resolution == "50") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
-    df_cfmat %>% filter(resolution == "100") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
-    df_cfmat %>% filter(resolution == "200") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
-    df_cfmat %>% filter(resolution == "400") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname()
+    df_cfmmat_sub %>% filter(resolution == "50") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
+    df_cfmmat_sub %>% filter(resolution == "100") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
+    df_cfmmat_sub %>% filter(resolution == "200") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
+    df_cfmmat_sub %>% filter(resolution == "400") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname()
   )
   names(x) <- c("50", "100", "200", "400")
   v.table <- gplots::venn(x)
   # FP genes only at 200 um
   genes <- attr(v.table, "intersections")$`200`
-  
+  return(data.frame(rotation_deg = deg, gene = genes, presence = 1))
 }))
 
 # find common genes (create model matrix of all genes --> find gene that is present in all permutations)
 mm_genes_fp <- pivot_wider(df_genes_fp, names_from = rotation_deg, values_from = presence, values_fill = list(presence = 0))
 mm_genes_fp <- column_to_rownames(mm_genes_fp, var = "gene")
-rownames(mm_genes_fp)[which(rowSums(mm_genes_fp) == 10)]
-##WIP
+rowSums(mm_genes_fp)
+n <- 5
+rownames(mm_genes_fp)[which(rowSums(mm_genes_fp) >= n)]
 
 # rasterize for plotting
 spe_50 <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 50, fun = "mean", BPPARAM = MulticoreParam())
@@ -1176,6 +1170,7 @@ moransI_comb <- rbind(moransI_results_sc, moransI_results_rast)
 genes <- attr(v.table, "intersections")$`50:100:200:400`
 # FP genes only at 200 um
 genes <- attr(v.table, "intersections")$`200`
+genes <- c("Vmn1r53")
 
 # plot variance of nnSVG p-value
 df_plt <- df %>%
@@ -1285,9 +1280,209 @@ for (gene in genes) {
   ggsave(plt_comb, file = here("plots", dataset_name, paste0(dataset_name, "_gexp_", gene, ".png")), width = 15, height = 15, dpi = 300)
 }
 
+## evaluate the relationship between p-value and proportion of cells with non-zero expression for each gene (point) for each resolution/permutation
+# create data.frame with number and proportion of cells with non-zero expression for each gene
+counts <- assay(spe, "counts")
+counts_bin <- as.matrix((counts > 0)*1)
+df_nonzero <- data.frame(count = rowSums(counts_bin), proportion = rowSums(counts_bin)/dim(counts_bin)[2]) %>%
+  rownames_to_column(var = "gene")
+# sanity check
+gene <- "Vmn1r53"
+length(which(counts[gene,] > 0))
+df_nonzero[df_nonzero$gene == gene,]
+# plot single cell resolution
+df_plt <- cbind(df_nonzero, df_perf4[df_perf4$resolution == "singlecell",c("padj", "confusion_matrix")]) %>%
+  mutate(confusion_matrix = factor(confusion_matrix, levels = c("TP", "TN", "FP", "FN")))
+ggplot(df_plt, aes(x = proportion, y = -log10(padj), col = confusion_matrix)) +
+  geom_point() +
+  geom_hline(yintercept = -log10(alpha), linetype = "dashed", color = "black") +
+  labs(title = "single cell",
+       x = "Proportion of cells with non-zero expression",
+       y = "-log10(adjusted p-value)",
+       col = "Confusion matrix\nlabel") +
+  theme_bw()
+# plot rasterized resolution
+df_perf4_rast <- df_perf4[df_perf4$resolution != "singlecell",]
+for (deg in unique(df_perf4_rast$rotation_deg)) {
+  df_plt <- do.call(rbind, lapply(unique(df_perf4_rast$resolution), function(res) {
+    temp <- data.frame(resolution = res, rotation_deg = deg, df_nonzero, df_perf4_rast[df_perf4_rast$resolution == res & df_perf4_rast$rotation_deg == deg, c("padj", "confusion_matrix")]) %>%
+      mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400")),
+             confusion_matrix = factor(confusion_matrix, levels = c("TP", "TN", "FP", "FN")))
+  }))
+  ggplot(df_plt, aes(x = proportion, y = -log10(padj), col = confusion_matrix)) +
+    facet_wrap(~resolution) +
+    geom_point(size = 1.5, stroke = 0) +
+    geom_hline(yintercept = -log10(alpha), linetype = "dashed", color = "black") +
+    labs(title = paste0("Rotated at ", deg, " degrees"),
+         x = "Proportion of cells with non-zero expression",
+         y = "-log10(adjusted p-value)",
+         col = "Confusion matrix\nlabel") +
+    theme_bw()
+  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_proportion_vs_pval_rotation_deg_", deg, ".png")))
+  ggplot(df_plt, aes(x = count, y = -log10(padj), col = confusion_matrix)) +
+    facet_wrap(~resolution) +
+    geom_point(size = 1.5, stroke = 0) +
+    geom_hline(yintercept = -log10(alpha), linetype = "dashed", color = "black") +
+    labs(title = paste0("Rotated at ", deg, " degrees"),
+         x = "Number of cells with non-zero expression",
+         y = "-log10(adjusted p-value)",
+         col = "Confusion matrix\nlabel") +
+    theme_bw()
+  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_count_vs_pval_rotation_deg_", deg, ".png")))
+}
+
+## use permutations to reduce "FP"?
+# load relevant dataset
+n_rotation <- 10
+angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+## voting/vote method
+# set a threshold p value
+alpha <- 0.05
+# set a proportion of permutations required for vote
+prop_vote <- 1
+
+df_rast <- df[df$resolution != "singlecell",]
+sc <- df[df$resolution == "singlecell",]
+
+# create obs data.frame storing TRUE/FALSE labels for SVG based on adjusted p value at single-cell resolution (ground truth)
+obs <- data.frame(gene = sc$gene, obs = sc$padj <= alpha) %>%
+  column_to_rownames(var = "gene")
+
+# compute the number of votes (adjusted p value <= alpha) for each gene
+df_num_vote <- df_rast %>%
+  group_by(resolution, gene) %>%
+  summarise(num_vote = sum(padj <= alpha),
+            prop_vote = sum(padj <= alpha)/length(unique(rotation_deg))) %>%
+  as.data.frame()
+
+# sanity check
+resolution <- 200
+gene <- "Adora2b"
+test <- df_rast[df_rast$resolution == resolution & df_rast$gene == gene,]
+df_num_vote[df_num_vote$resolution == resolution & df_num_vote$gene == gene,]$num_vote == sum(test$padj <= alpha)
+sc[sc$gene == gene,]$padj
+obs[gene,]
+
+df_perf_vote <- do.call(rbind, lapply(unique(df_num_vote$resolution), function(res) {
+  df_num_vote_sub <- df_num_vote %>% filter(resolution == res)
+  pred = data.frame(gene = df_num_vote_sub$gene, prop_vote = df_num_vote_sub$prop_vote, pred = df_num_vote_sub$prop_vote >= prop_vote) %>%
+    column_to_rownames(var = "gene")
+  results_sig <- merge(pred, obs, by = "row.names", all = FALSE)
+  colnames(results_sig) <- c("gene", "prop_vote", "pred", "obs")
+  return(data.frame(resolution = res, calculatePerformanceMetrics(results_sig)))
+}))
+
+df_plt <- df_perf_vote %>%
+  mutate(resolution = as.numeric(resolution)) %>%
+  select(resolution, TPR, TNR, PPV) %>%
+  pivot_longer(!resolution, names_to = "metrics", values_to = "values")
+
+ggplot(df_plt, aes(x = resolution, y = values, col = metrics, shape = metrics)) +
+  geom_line() +
+  geom_point() +
+  ylim(0,1) +
+  theme_bw()
+
+# compare across number of votes
+prop_votes <- c(0.1, 0.3, 0.5, 0.7, 1)
+
+df_perf_vote <- do.call(rbind, lapply(prop_votes, function(prop_vote) {
+  out <- do.call(rbind, lapply(unique(df_num_vote$resolution), function(res) {
+    df_num_vote_sub <- df_num_vote %>% filter(resolution == res)
+    pred = data.frame(gene = df_num_vote_sub$gene, prop_vote = df_num_vote_sub$prop_vote, pred = df_num_vote_sub$prop_vote >= prop_vote) %>%
+      column_to_rownames(var = "gene")
+    results_sig <- merge(pred, obs, by = "row.names", all = FALSE)
+    colnames(results_sig) <- c("gene", "prop_vote", "pred", "obs")
+    return(data.frame(prop_vote = prop_vote, resolution = res, calculatePerformanceMetrics(results_sig)))
+  }))
+}))
+
+df_plt <- df_perf_vote %>%
+  mutate(prop_vote = factor(prop_vote),
+         resolution = as.numeric(resolution)) %>%
+  select(prop_vote, resolution, TPR, TNR, PPV)
+
+# baseline (mean of all permutations)
+df_perf <- do.call(rbind, lapply(unique(df$resolution), function(res) {
+  if (res != "singlecell") {
+    sc <- df[df$resolution == "singlecell",]
+    out <- do.call(rbind, lapply(angle_deg_list, function(deg) {
+      rast <- df[df$resolution == res & df$rotation_deg == deg,]
+      results_sig <- do.call(rbind, lapply(rast$gene, function(gene) {
+        return(data.frame(gene = gene, pred = rast[rast$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
+      }))
+      out <- calculatePerformanceMetrics(results_sig)
+      return(data.frame(rotation_deg = deg, out))
+    }))
+    return(data.frame(resolution = res, out))
+  }
+}))
+df_perf_summary <- df_perf %>%
+  group_by(resolution) %>%
+  summarise(TPR_mean = mean(TPR),
+            TPR_sd = sd(TPR),
+            TNR_mean = mean(TNR),
+            TNR_sd = sd(TNR),
+            PPV_mean = mean(PPV),
+            PPV_sd = sd(PPV)) %>%
+  mutate(resolution = as.numeric(resolution))
+
+ggplot(df_plt, aes(x = resolution, y = TPR, col = prop_vote)) +
+  geom_line() +
+  geom_point() +
+  geom_line(data = df_perf_summary, aes(x = resolution, y = TPR_mean), color = "gray") +
+  geom_point(data = df_perf_summary, aes(x = resolution, y = TPR_mean), color = "gray", size = 1) +
+  geom_errorbar(data = df_perf_summary, aes(x = resolution, y = TPR_mean, ymin = TPR_mean-TPR_sd, ymax = TPR_mean+TPR_sd), color = "gray", width = 10) +
+  ylim(0,1) +
+  labs(x = "Rasterization\nResolution",
+       col = "Required % of votes\n(n = 10)",
+       shape = "Required % of votes\n(n = 10)") +
+  theme_bw()
+
+ggplot(df_plt, aes(x = resolution, y = PPV, col = prop_vote)) +
+  geom_line() +
+  geom_point() +
+  geom_line(data = df_perf_summary, aes(x = resolution, y = PPV_mean), color = "gray") +
+  geom_point(data = df_perf_summary, aes(x = resolution, y = PPV_mean), color = "gray", size = 1) +
+  geom_errorbar(data = df_perf_summary, aes(x = resolution, y = PPV_mean, ymin = PPV_mean-PPV_sd, ymax = PPV_mean+PPV_sd), color = "gray", width = 10) +
+  ylim(0,1) +
+  labs(x = "Rasterization\nResolution",
+       col = "Required % of votes\n(n = 10)",
+       shape = "Required % of votes\n(n = 10)") +
+  theme_bw()
+
+ggplot(df_plt, aes(x = resolution, y = TNR, col = prop_vote)) +
+  geom_line() +
+  geom_point() +
+  geom_line(data = df_perf_summary, aes(x = resolution, y = TNR_mean), color = "gray") +
+  geom_point(data = df_perf_summary, aes(x = resolution, y = TNR_mean), color = "gray", size = 1) +
+  geom_errorbar(data = df_perf_summary, aes(x = resolution, y = TNR_mean, ymin = TNR_mean-TNR_sd, ymax = TNR_mean+TNR_sd), color = "gray", width = 10) +
+  ylim(0,1) +
+  labs(x = "Rasterization\nResolution",
+       col = "Required % of votes\n(n = 10)",
+       shape = "Required % of votes\n(n = 10)") +
+  theme_bw()
+
+# set a threshold p value
+alpha <- 0.05
+df_perf <- do.call(rbind, lapply(unique(df$resolution), function(res) {
+  if (res != "singlecell") {
+    sc <- df[df$resolution == "singlecell",]
+    out <- do.call(rbind, lapply(angle_deg_list, function(deg) {
+      rast <- df[df$resolution == res & df$rotation_deg == deg,]
+      results_sig <- do.call(rbind, lapply(rast$gene, function(gene) {
+        return(data.frame(gene = gene, pred = rast[rast$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
+      }))
+      out <- calculatePerformanceMetrics(results_sig)
+      return(data.frame(rotation_deg = deg, out))
+    }))
+    return(data.frame(resolution = res, out))
+  }
+}))
 
 
-# plot FP genes found only in a specific resolution
+
 
 # what if we make the number of SVG and non-SVG the same? (balanced dataset)
 svgs <- df[(df$resolution == "singlecell" & df$padj <= 0.05),]$gene # 401
@@ -1316,10 +1511,10 @@ df_perf <- do.call(rbind, lapply(unique(df_selected$resolution), function(res) {
   }
 }))
 
-df_perf_raw <- df_perf %>%
-  mutate(resolution = as.numeric(resolution)) %>%
-  select(resolution, rotation_deg, TPR, TNR, PPV) %>%
-  pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values")
+# df_perf_raw <- df_perf %>%
+#   mutate(resolution = as.numeric(resolution)) %>%
+#   select(resolution, rotation_deg, TPR, TNR, PPV) %>%
+#   pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values")
 
 df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
   out <- do.call(rbind, lapply(c("TPR", "TNR", "PPV"), function(metric) {

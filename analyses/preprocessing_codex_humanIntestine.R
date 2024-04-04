@@ -64,7 +64,6 @@ for (donor in donors) {
       plot(pos)
       
       ## colData
-      coldata <- data_sub[,c("size", "array", "donor", "cell_type", "Neighborhood", "Community", "Tissue.Unit")]
       coldata <- data_sub[,c("array", "donor", "Tissue_location", "Cell.Type", "Neighborhood", "Community")]
       
       rownames(pos) <- rownames(coldata) <- paste0("cell", seq(dim(pos)[1]))
@@ -80,7 +79,6 @@ for (donor in donors) {
     }
   }
 }
-
 
 # temporary ---------------------------------------------------------------
 
@@ -123,13 +121,13 @@ if (nrow(data_sub) > 0) {
 
 # Format into SpatialExperiment class ----------------------------------
 
-spe <- SpatialExperiment::SpatialExperiment(
-  assays = list(counts = gexp, lognorm = gexp_lognorm),
-  spatialCoords = as.matrix(pos),
-  colData = coldata
-)
-
-saveRDS(spe, file = here("outputs", paste0(dataset_name, "_preprocessed.RDS")))
+# spe <- SpatialExperiment::SpatialExperiment(
+#   assays = list(counts = gexp, lognorm = gexp_lognorm),
+#   spatialCoords = as.matrix(pos),
+#   colData = coldata
+# )
+# 
+# saveRDS(spe, file = here("outputs", paste0(dataset_name, "_preprocessed.RDS")))
 
 # ## use OneDrive directory for now
 # data <- read.csv('~/Library/CloudStorage/OneDrive-JohnsHopkins/JEFworks Gohta Aihara/Data/CODEX_humanIntestine/23_09_CODEX_HuBMAP_alldata_Dryad_merged.csv', row.names = 1)
