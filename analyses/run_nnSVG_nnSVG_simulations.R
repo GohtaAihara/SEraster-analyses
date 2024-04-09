@@ -252,48 +252,6 @@ ggplot(df, aes(x = x, y = y, col = gene)) +
   )
 ggsave(filename = here("plots", dataset_name, paste0("nnsvg_sim_singlecell.pdf")), width = 12, height = 10, dpi = 300)
 
-# ## simulations for shuffle based on medium bandwidth, medium expression
-# sim_names_shuffle <- c(
-#   "sim_shuffle00", 
-#   "sim_shuffle01", 
-#   "sim_shuffle02", 
-#   "sim_shuffle03", 
-#   "sim_shuffle04", 
-#   "sim_shuffle05", 
-#   "sim_shuffle06", 
-#   "sim_shuffle07", 
-#   "sim_shuffle08", 
-#   "sim_shuffle09", 
-#   "sim_shuffle10"
-# )
-# 
-# df <- do.call(rbind, lapply(sim_names_shuffle, function(i) {
-#   ## load dataset
-#   spe <- readRDS(file = here(dir, paste0("spe_", i, ".RDS")))
-#   svg_example <- which(rowData(spe)$expressed)[1]
-#   
-#   meta <- as.numeric(gsub("[^0-9]", "", i))
-#   
-#   return(data.frame(dataset = i, shuffle = paste0(meta*10, "% shuffled"), x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = assay(spe)[svg_example,]))
-# }))
-# 
-# df <- df %>%
-#   mutate(shuffle = factor(shuffle, levels = paste0(seq(0, 100, by = 10), "% shuffled")))
-# 
-# ggplot(df, aes(x = x, y = y, col = gene)) +
-#   facet_wrap(~shuffle) +
-#   coord_fixed() +
-#   geom_point(size = 0.7) +
-#   scale_color_viridis_c(name = "Log-normalized\nexpression") +
-#   labs(title = "Simulated dataset (shuffle)",
-#        x = "x (um)",
-#        y = "y (um)") +
-#   theme_bw() +
-#   theme(
-#     axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)
-#   )
-# ggsave(filename = here("plots", dataset_name, paste0("nnsvg_sim_shuffle_singlecell.pdf")), width = 15, height = 10, dpi = 300)
-
 ## Figure x (single cell and rasterization visualizations)
 res_list <- c(list("singlecell"), as.list(seq(0.01, 0.1, by = 0.01)*6000))
 
@@ -396,53 +354,37 @@ for (i in sim_names) {
     return(data.frame(resolution = res, out2))
   }))
   
-  meta <- unlist(strsplit(gsub("^sim_(.*?)Bandwidth_(.*?)Expr$", "\\1 \\2", i), " "))
+  df_perf <- out %>%
+    select(resolution, rotation_deg, TPR, TNR, PPV) %>%
+    pivot_longer(!c(resolution, rotation_deg), names_to = "metrics", values_to = "values") %>%
+    mutate(resolution = case_when(
+        resolution == "singlecell" ~ 0,
+        TRUE ~ as.numeric(gsub("\\D", "", resolution)))
+    )
   
-  df_perf <- data.frame(dataset = i, bandwidth = meta[1], expression = meta[2], out)
+  df_perf_summary <- df_perf %>%
+    group_by(resolution, metrics) %>%
+    summarise(mean = mean(values), sd = sd(values)) %>%
+    mutate(resolution = as.numeric(resolution),
+           metrics = factor(metrics, levels = c("TPR", "PPV", "TNR")))
   
-  df_perf_raw <- df_perf %>%
-    mutate(resolution = factor(resolution, levels = res_list),
-           bandwidth = factor(bandwidth, levels = c("large", "med", "small")),
-           expression = factor(expression, levels = c("full", "med", "low"))) %>%
-    select(dataset, bandwidth, expression, resolution, rotation_deg, TPR, TNR, PPV) %>%
-    pivot_longer(!c(dataset, bandwidth, expression, resolution, rotation_deg), names_to = "metrics", values_to = "values")
-  
-  df_perf_summary <- do.call(rbind, lapply(unique(df_perf$resolution), function(res) {
-    out <- do.call(rbind, lapply(unique(df_perf$dataset), function(dataset) {
-      out2 <- do.call(rbind, lapply(c("TPR", "TNR", "PPV"), function(metric) {
-        temp <- df_perf[df_perf$dataset == dataset & df_perf$resolution == res, metric]
-        return(data.frame(metrics = metric, mean = mean(temp, na.rm = TRUE), sd = sd(temp, na.rm = TRUE)))
-      }))
-      
-      meta <- unlist(strsplit(gsub("^sim_(.*?)Bandwidth_(.*?)Expr$", "\\1 \\2", dataset), " "))
-      
-      return(data.frame(dataset = dataset, bandwidth = meta[1], expression = meta[2], resolution = factor(res, levels = res_list), out2))
-    }))
-  }))
-  df_perf_summary <- df_perf_summary %>%
-    mutate(resolution = factor(resolution, levels = res_list),
-           bandwidth = factor(bandwidth, levels = c("large", "med", "small")),
-           expression = factor(expression, levels = c("full", "med", "low")))
-  
-  df_perf_summary2 <- df_perf_summary
-  df_perf_summary2$resolution <- sub("singlecell", 0, df_perf_summary2$resolution)
-  df_perf_summary2$resolution <- as.numeric(df_perf_summary2$resolution)
-  
-  df_perf_raw$resolution <- sub("singlecell", 0, df_perf_raw$resolution)
-  df_perf_raw$resolution <- as.numeric(df_perf_raw$resolution)
+  # color blind friendly colors
+  col <- dittoSeq::dittoColors(reps = 1)[1:3]
   
   set.seed(0)
-  ggplot(df_perf_raw, aes(x = resolution, y = values, col = metrics)) +
-    geom_jitter(width = 12, alpha = 0.3, size = 2, stroke = 0) +
-    geom_line(data = df_perf_summary2, aes(x = resolution, y = mean, col = metrics)) +
-    geom_point(data = df_perf_summary2, aes(x = resolution, y = mean, col = metrics), size = 1) +
-    geom_errorbar(data = df_perf_summary2, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics)) +
-    scale_x_continuous(breaks = unique(df_perf_summary2$resolution)) +
+  ggplot() +
+    geom_jitter(data = df_perf, aes(x = resolution, y = values, col = metrics, shape = metrics), width = 12, alpha = 0.4, size = 2, stroke = 0) +
+    geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
+    geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics, shape = metrics), size = 2) +
+    geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics), width = 30) +
+    scale_color_manual(values = col) +
+    scale_x_continuous(breaks = unique(df_perf_summary$resolution)) +
     ylim(0,1) +
-    labs(title = "Performance metrics comparison",
+    labs(title = i,
          x = "Resolution",
          y = "Performance",
-         col = "Metric") +
+         col = "Metric",
+         shape = "Metric") +
     theme_bw() +
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
   ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary_", i, ".pdf")), width = 6, heigh = 5, dpi = 300)
@@ -618,25 +560,25 @@ spe <- readRDS(file = here(dir, paste0("spe_", sim_name, ".RDS")))
 svg_example <- which(rowData(spe)$expressed)[1]
 lim <- c(4000, 6000)
 
-df <- data.frame(spatialCoords(spe), gene = assay(spe)[svg_example,])
-ggplot(df, aes(x = x, y = y, col = gene)) +
-  coord_fixed() +
-  geom_point(size = 6) +
-  scale_color_viridis_c() +
-  xlim(lim) +
-  ylim(lim) +
-  labs(title = "Single cell") +
-  theme_bw() +
-  theme(
-    legend.position="none",
-    panel.grid = element_blank(),
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-  )
-ggsave(filename = here("plots", dataset_name, paste0(sim_name, "_closeup_singlecell.pdf")), width = 10, height = 10, dpi = 300)
+# df <- data.frame(spatialCoords(spe), gene = assay(spe)[svg_example,])
+# ggplot(df, aes(x = x, y = y, col = gene)) +
+#   coord_fixed() +
+#   geom_point(size = 6) +
+#   scale_color_viridis_c() +
+#   xlim(lim) +
+#   ylim(lim) +
+#   labs(title = "Single cell") +
+#   theme_bw() +
+#   theme(
+#     legend.position="none",
+#     panel.grid = element_blank(),
+#     axis.title = element_blank(),
+#     axis.text = element_blank(),
+#     axis.ticks = element_blank(),
+#   )
+# ggsave(filename = here("plots", dataset_name, paste0(sim_name, "_closeup_singlecell.pdf")), width = 10, height = 10, dpi = 300)
 
-res_list <- c(60, 120, 180, 240, 300, 360, 420, 480, 540, 600)
+res_list <- c(180, 240, 300)
 for (res in res_list) {
   ## create bbox
   pos <- spatialCoords(spe)
@@ -655,10 +597,10 @@ for (res in res_list) {
   df <- data.frame(spatialCoords(spe), gene = assay(spe)[svg_example,])
   ggplot(df, aes(x = x, y = y, col = gene)) +
     coord_fixed() +
-    geom_point(size = 6) +
+    geom_point(size = 12) +
     scale_color_viridis_c() +
-    geom_hline(yintercept = grid_coord[,2], linetype = "solid", color = "black") +
-    geom_vline(xintercept = grid_coord[,1], linetype = "solid",color = "black") +
+    geom_hline(yintercept = grid_coord[,2], linetype = "solid", color = "lightgray", linewidth = 2.5) +
+    geom_vline(xintercept = grid_coord[,1], linetype = "solid",color = "lightgray", linewidth = 2.5) +
     xlim(lim) +
     ylim(lim) +
     labs(title = "Single cell") +
