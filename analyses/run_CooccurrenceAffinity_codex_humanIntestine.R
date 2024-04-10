@@ -29,14 +29,10 @@ par(mfrow=c(1,1))
 dataset_name = "codex_humanIntestine"
 method = "CooccurrenceAffinity"
 
-<<<<<<< Updated upstream
 ct_labels <- factor(c("NK", "Enterocyte", "MUC1+ Enterocyte", "TA", "CD66+ Enterocyte", "Paneth", "Smooth muscle", "M1 Macrophage", "Goblet", "Neuroendocrine", "CD57+ Enterocyte", "Lymphatic", "CD8+ T", "DC", "M2 Macrophage", "B", "Neutrophil", "Endothelial", "Cycling TA", "Plasma", "CD4+ T cell", "Stroma", "Nerve", "ICC", "CD7+ Immune"))
-=======
 donors <- c("B004", "B005", "B006", "B008", "B009", "B010", "B011", "B012")
 tissue_locations <- c("Transverse", "Proximal Jejunum", "Duodenum", "Ascending", "Ileum", "Mid-jejunum", "Descending", "Descending - Sigmoid")
-celltype <- factor(c("NK", "Enterocyte", "MUC1+ Enterocyte", "TA", "CD66+ Enterocyte", "Paneth", "Smooth muscle", "M1 Macrophage", "Goblet", "Neuroendocrine", "CD57+ Enterocyte", "Lymphatic", "CD8+ T", "DC", "M2 Macrophage", "B", "Neutrophil", "Endothelial", "Cycling TA", "Plasma", "CD4+ T cell", "Stroma", "Nerve", "ICC", "CD7+ Immune"))
-
->>>>>>> Stashed changes
+# celltype <- factor(c("NK", "Enterocyte", "MUC1+ Enterocyte", "TA", "CD66+ Enterocyte", "Paneth", "Smooth muscle", "M1 Macrophage", "Goblet", "Neuroendocrine", "CD57+ Enterocyte", "Lymphatic", "CD8+ T", "DC", "M2 Macrophage", "B", "Neutrophil", "Endothelial", "Cycling TA", "Plasma", "CD4+ T cell", "Stroma", "Nerve", "ICC", "CD7+ Immune"))
 
 # Load dataset ------------------------------------------------------------
 # 
@@ -46,16 +42,16 @@ celltype <- factor(c("NK", "Enterocyte", "MUC1+ Enterocyte", "TA", "CD66+ Entero
 # donor <- donors[[1]]
 # tissue_location <- tissue_locations[[1]]
 
-<<<<<<< Updated upstream
-## "CL" dataset in Fig. 3
-=======
 ## "CL" dataset in Fig. 3 of the original paper
->>>>>>> Stashed changes
 donor <- "B006"
 tissue_location <- "Ascending"
 spe <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_loc_", tissue_location, "_preprocessed.RDS")))
 
-<<<<<<< Updated upstream
+## "SB" dataset in Fig. 3 of the original paper
+donor <- "B005"
+tissue_location <- "Proximal Jejunum"
+spe <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_loc_", tissue_location, "_preprocessed.RDS")))
+
 # Run methods -------------------------------------------------------------
 
 ## set resolution parameters
@@ -134,39 +130,34 @@ for (res in res_list) {
   ## save results
   saveRDS(affinity_results, file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
 }
-=======
-## "SB" dataset in Fig. 3 of the original paper
-donor <- "B005"
-tissue_location <- "Proximal Jejunum"
-spe <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_loc_", tissue_location, "_preprocessed.RDS")))
-
-# Run methods -------------------------------------------------------------
-
->>>>>>> Stashed changes
 
 
 # Plot --------------------------------------------------------------------
 
-<<<<<<< Updated upstream
 ## single cell visualizations
 col_clu <- gg_color_hue(length(levels(ct_labels)))
 names(col_clu) <- levels(ct_labels)
 
-## Figure 3a (cell type single-cell resolution)
-df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], celltypes = colData(spe)$Cell.Type)
-ggplot(df, aes(x = x, y = y, col = celltypes)) +
-  coord_fixed() +
-  rasterise(geom_point(size = 0.5, stroke = 0), dpi = 300) +
-  scale_color_manual(name = "Cell type", values = col_clu) +
-  guides(col = guide_legend(override.aes = list(size = 3))) +
-  labs(title = paste0("Donor: ", donor, ", Tissue: ", tissue_location)) +
-  theme_bw() +
-  theme(
-    panel.grid = element_blank(),
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-  )
+for (donor in donors) {
+  for (tissue_location in tissue_locations) {
+    spe <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_loc_", tissue_location, "_preprocessed.RDS")))
+    df <- data.frame(spatialCoords(spe), celltype = colData(spe)$Cell.Type)
+    ggplot(df, aes(x = x, y = y, col = celltype)) +
+      coord_fixed() +
+      geom_point(size = 0.5, stroke = 0) +
+      scale_color_manual(name = "Cell type", values = col_clu) +
+      guides(col = guide_legend(override.aes = list(size = 3))) +
+      labs(title = paste0("Donor: ", donor, ", Tissue: ", tissue_location)) +
+      theme_bw() +
+      theme(
+        panel.grid = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+      )
+    ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_sc_ct_donor_", donor, "_tissue_", tissue_location, ".pdf")))
+  }
+}
 
 ## Figure 3c (heatmaps)
 res_list <- c(10, 25, 75, 50, 100, 150, 200, 300, 400)
@@ -216,6 +207,7 @@ for (res in res_list) {
 }
 
 ## Figure 3x
+# identify niches manually
 niches <- list(
   factor(c("NK", "CD57+ Enterocyte", "Paneth"), levels = levels(ct_labels)),
   factor(c("Enterocyte", "Neuroendocrine", "TA"), levels = levels(ct_labels)),
@@ -225,10 +217,66 @@ niches <- list(
 )
 names(niches) <- paste0("niche ", seq_along(niches))
 
-for (i in seq_along(niches)) {
+# identify niches using dendrogram
+res <- 400
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+## create symmetric data
+df_flipped <- df[df$celltypeA != df$celltypeB,]
+df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
+df_sym <- rbind(df, df_flipped)
+## use symmetric (redundant) data
+## reset label order
+df_sym <- df_sym %>%
+  mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
+         celltypeB = factor(celltypeB, levels(ct_labels)))
+## reorganize into matrix
+df_heatmap_sym <- cast(df_sym, celltypeA ~ celltypeB, value = "alpha")
+df_heatmap_sym <- df_heatmap_sym[,-1]
+rownames(df_heatmap_sym) <- colnames(df_heatmap_sym)
+isSymmetric.matrix(as.matrix(df_heatmap_sym))
+## cluster
+hc_sym_interest <- hclust(dist(df_heatmap_sym))
+# plot dendrogram
+plot(hc_sym_interest, labels = rownames(df_heatmap_sym))
+k_select <- 6
+rect.hclust(hc_sym_interest, k = k_select, border = "red")
+# get niches
+niches <- cutree(hc_sym_interest, k = k_select)
+names(niches) <- rownames(df_heatmap_sym)
+
+# for (i in seq_along(niches)) {
+#   ## subset by clusters
+#   spe_sub <- spe[,spe$Cell.Type %in% niches[[i]]]
+#   
+#   ## plot
+#   df <- data.frame(spatialCoords(spe))
+#   df_sub <- data.frame(x = spatialCoords(spe_sub)[,1], y = spatialCoords(spe_sub)[,2], celltype = colData(spe_sub)$Cell.Type)
+#   ggplot(df, aes(x = x, y = y)) +
+#     coord_fixed() +
+#     rasterise(geom_point(color = "lightgray", size = 0.5, stroke = 0), dpi = 300) +
+#     rasterise(geom_point(data = df_sub, aes(x = x, y = y, col = celltype), size = 0.5, stroke = 0), dpi = 300) +
+#     scale_color_manual(values = col_clu[niches[[i]]]) +
+#     guides(col = guide_legend(override.aes = list(size = 3))) +
+#     # scale_color_manual(name = "Clusters", values = gg_color_hue(67)) +
+#     labs(title = paste0("Donor: ", donor, ", Tissue: ", tissue_location, "\nNiche ", i),
+#          x = "x (um)",
+#          y = "y (um)",
+#          col = "Cell type") +
+#     theme_bw() +
+#     theme(
+#       # legend.position = "bottom",
+#       panel.grid = element_blank(),
+#       axis.title = element_blank(),
+#       axis.text = element_blank(),
+#       axis.ticks = element_blank(),
+#     )
+#   ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_singlecell_niche_", i, ".pdf")), dpi = 300)
+# }
+
+for (i in unique(niches)) {
   ## subset by clusters
-  spe_sub <- spe[,spe$Cell.Type %in% niches[[i]]]
-  
+  spe_sub <- spe[,spe$Cell.Type %in% names(niches[niches == i])]
+
   ## plot
   df <- data.frame(spatialCoords(spe))
   df_sub <- data.frame(x = spatialCoords(spe_sub)[,1], y = spatialCoords(spe_sub)[,2], celltype = colData(spe_sub)$Cell.Type)
@@ -236,7 +284,7 @@ for (i in seq_along(niches)) {
     coord_fixed() +
     rasterise(geom_point(color = "lightgray", size = 0.5, stroke = 0), dpi = 300) +
     rasterise(geom_point(data = df_sub, aes(x = x, y = y, col = celltype), size = 0.5, stroke = 0), dpi = 300) +
-    scale_color_manual(values = col_clu[niches[[i]]]) +
+    scale_color_manual(values = col_clu[names(niches[niches == i])]) +
     guides(col = guide_legend(override.aes = list(size = 3))) +
     # scale_color_manual(name = "Clusters", values = gg_color_hue(67)) +
     labs(title = paste0("Donor: ", donor, ", Tissue: ", tissue_location, "\nNiche ", i),
@@ -251,21 +299,27 @@ for (i in seq_along(niches)) {
       axis.text = element_blank(),
       axis.ticks = element_blank(),
     )
-  ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_singlecell_niche_", i, ".pdf")), dpi = 300)
+  ggsave(filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_singlecell_niche_", i, ".pdf")), dpi = 300)
 }
 
 ## plot summary of niches
 # make it adaptable later
+# df <- data.frame(spatialCoords(spe), colData(spe)) %>%
+#   mutate(niche = case_when(
+#     Cell.Type %in% niches[["niche 1"]] ~ "niche 1",
+#     Cell.Type %in% niches[["niche 2"]] ~ "niche 2",
+#     Cell.Type %in% niches[["niche 3"]] ~ "niche 3",
+#     Cell.Type %in% niches[["niche 4"]] ~ "niche 4",
+#     Cell.Type %in% niches[["niche 5"]] ~ "niche 5",
+#     TRUE ~ "unknown" # Default case for cell types not found in any niche
+#   )) %>%
+#   mutate(niche = factor(niche, levels = c(names(niches), "unknown")))
+
+df_niches <- data.frame(Cell.Type = names(niches), niche = niches)
+rownames(df_niches) <- NULL
 df <- data.frame(spatialCoords(spe), colData(spe)) %>%
-  mutate(niche = case_when(
-    Cell.Type %in% niches[["niche 1"]] ~ "niche 1",
-    Cell.Type %in% niches[["niche 2"]] ~ "niche 2",
-    Cell.Type %in% niches[["niche 3"]] ~ "niche 3",
-    Cell.Type %in% niches[["niche 4"]] ~ "niche 4",
-    Cell.Type %in% niches[["niche 5"]] ~ "niche 5",
-    TRUE ~ "unknown" # Default case for cell types not found in any niche
-  )) %>%
-  mutate(niche = factor(niche, levels = c(names(niches), "unknown")))
+  left_join(df_niches, by = "Cell.Type") %>%
+  mutate(niche = factor(niche))
 
 ggplot(df, aes(x = x, y = y)) +
   coord_fixed() +
@@ -285,7 +339,7 @@ ggplot(df, aes(x = x, y = y)) +
     axis.text = element_blank(),
     axis.ticks = element_blank(),
   )
-ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_singlecell_niches_summary.pdf")), dpi = 300)
+ggsave(filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_singlecell_niches_summary.pdf")), dpi = 300)
 
 ## compare niches vs. neighborhoods in the original paper
 # compute counts/proportions of neighborhoods in the entire dataset
@@ -325,17 +379,17 @@ ggplot(df_plt, aes(x = log2(fold_change), y = niche, col = Neighborhood, shape =
        col = "Neighborhood",
        shape = "Niche") +
   theme_bw()
-ggsave(file = here("plots", dataset_name, method, paste0(dataset_name, "_niche_neighborhood_fold_change_resolution_50.pdf")), width = 8, height = 8, dpi = 300)
+ggsave(file = here("plots", dataset_name, method, res, paste0(dataset_name, "_niche_neighborhood_fold_change_resolution_50.pdf")), width = 8, height = 8, dpi = 300)
 
-ggplot(df_plt, aes(x = Neighborhood, y = niche, fill = log2(df_plt))) +
-  geom_tile() +
-  scale_fill_gradient2(low = "blue", mid = "white", high = "red") +
-  labs(x = "Neighborhoods",
-       y = "Niches") +
-  theme_bw() +
-  theme(
-    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)
-  )
+# ggplot(df_plt, aes(x = Neighborhood, y = niche, fill = log2(df_plt))) +
+#   geom_tile() +
+#   scale_fill_gradient2(low = "blue", mid = "white", high = "red") +
+#   labs(x = "Neighborhoods",
+#        y = "Niches") +
+#   theme_bw() +
+#   theme(
+#     axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)
+#   )
 
 # plot with ComplexHeatmap
 df_plt2 <- df_plt %>%
@@ -389,7 +443,7 @@ ggplot(df_plt, aes(x = log2(fold_change), y = niche, col = Community, shape = ni
        col = "Community",
        shape = "Niche") +
   theme_bw()
-ggsave(file = here("plots", dataset_name, method, paste0(dataset_name, "_niche_neighborhood_fold_change_resolution_50.pdf")), width = 8, height = 8, dpi = 300)
+ggsave(file = here("plots", dataset_name, method, res, paste0(dataset_name, "_niche_neighborhood_fold_change_resolution_50.pdf")), width = 8, height = 8, dpi = 300)
 
 # plot with ComplexHeatmap
 df_plt2 <- df_plt %>%
@@ -458,28 +512,3 @@ ComplexHeatmap::Heatmap(
   row_title = "Niches",
   column_title = "Tissue Unit"
 )
-=======
-col_celltype <- gg_color_hue(length(levels(celltype)))
-names(col_celltype) <- levels(celltype)
-
-for (donor in donors) {
-  for (tissue_location in tissue_locations) {
-    spe <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_loc_", tissue_location, "_preprocessed.RDS")))
-    df <- data.frame(spatialCoords(spe), celltype = colData(spe)$Cell.Type)
-    ggplot(df, aes(x = x, y = y, col = celltype)) +
-      coord_fixed() +
-      geom_point(size = 0.5, stroke = 0) +
-      scale_color_manual(name = "Cell type", values = col_celltype) +
-      guides(col = guide_legend(override.aes = list(size = 3))) +
-      labs(title = paste0("Donor: ", donor, ", Tissue: ", tissue_location)) +
-      theme_bw() +
-      theme(
-        panel.grid = element_blank(),
-        axis.title = element_blank(),
-        axis.text = element_blank(),
-        axis.ticks = element_blank(),
-      )
-    ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_sc_ct_donor_", donor, "_tissue_", tissue_location, ".pdf")))
-  }
-}
->>>>>>> Stashed changes

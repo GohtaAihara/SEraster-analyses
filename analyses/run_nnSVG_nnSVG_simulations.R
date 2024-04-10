@@ -599,8 +599,8 @@ for (res in res_list) {
     coord_fixed() +
     geom_point(size = 12) +
     scale_color_viridis_c() +
-    geom_hline(yintercept = grid_coord[,2], linetype = "solid", color = "lightgray", linewidth = 2.5) +
-    geom_vline(xintercept = grid_coord[,1], linetype = "solid",color = "lightgray", linewidth = 2.5) +
+    geom_hline(yintercept = grid_coord[,2], linetype = "solid", color = "black", linewidth = 2.5) +
+    geom_vline(xintercept = grid_coord[,1], linetype = "solid",color = "black", linewidth = 2.5) +
     xlim(lim) +
     ylim(lim) +
     labs(title = "Single cell") +

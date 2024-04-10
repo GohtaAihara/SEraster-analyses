@@ -1308,8 +1308,15 @@ df_perf_vote <- do.call(rbind, lapply(prop_votes, function(prop_vote) {
 }))
 
 df_plt <- df_perf_vote %>%
-  mutate(prop_vote = factor(prop_vote),
-         resolution = as.numeric(resolution)) %>%
+  mutate(
+    prop_vote = factor(case_when(
+      prop_vote == 0.1 ~ "1/10",
+      prop_vote == 0.3 ~ "3/10",
+      prop_vote == 0.5 ~ "5/10",
+      prop_vote == 0.7 ~ "7/10",
+      prop_vote == 1 ~ "10/10"
+    ), levels = (c("1/10", "3/10", "5/10", "7/10", "10/10"))),
+    resolution = as.numeric(resolution)) %>%
   select(prop_vote, resolution, TPR, TNR, PPV)
 
 # baseline (mean of all permutations)
@@ -1337,41 +1344,64 @@ df_perf_summary <- df_perf %>%
             PPV_sd = sd(PPV)) %>%
   mutate(resolution = as.numeric(resolution))
 
+# color blind friendly colors
+col_ditto <- dittoSeq::dittoColors(reps = 1)
+col_tpr <- c(col_ditto[25], col_ditto[17], col_ditto[1], col_ditto[9], col_ditto[33])
+col_ppv <- c(col_ditto[26], col_ditto[18], col_ditto[2], col_ditto[10], col_ditto[34])
+col_tnr <- c(col_ditto[27], col_ditto[19], col_ditto[3], col_ditto[11], col_ditto[35])
+
 ggplot(df_plt, aes(x = resolution, y = TPR, col = prop_vote)) +
-  geom_line() +
-  geom_point() +
   geom_line(data = df_perf_summary, aes(x = resolution, y = TPR_mean), color = "gray") +
-  geom_point(data = df_perf_summary, aes(x = resolution, y = TPR_mean), color = "gray", size = 1) +
-  geom_errorbar(data = df_perf_summary, aes(x = resolution, y = TPR_mean, ymin = TPR_mean-TPR_sd, ymax = TPR_mean+TPR_sd), color = "gray", width = 10) +
+  geom_point(data = df_perf_summary, aes(x = resolution, y = TPR_mean), color = "gray", size = 2) +
+  geom_errorbar(data = df_perf_summary, aes(x = resolution, y = TPR_mean, ymin = TPR_mean-TPR_sd, ymax = TPR_mean+TPR_sd), color = "gray", width = 5) +
+  geom_line() +
+  geom_point(aes(shape = prop_vote), size = 2) +
+  scale_color_manual(values = col_tpr) +
+  scale_x_continuous(breaks = unique(df_plt$resolution)) +
   ylim(0,1) +
-  labs(x = "Rasterization\nResolution",
-       col = "Required % of votes\n(n = 10)",
-       shape = "Required % of votes\n(n = 10)") +
-  theme_bw()
+  labs(title = "TPR",
+       x = "Rasterization\nResolution",
+       col = "Required votes/total permutations",
+       shape = "Required votes/total permutations") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_voting_tpr.pdf")))
 
 ggplot(df_plt, aes(x = resolution, y = PPV, col = prop_vote)) +
-  geom_line() +
-  geom_point() +
   geom_line(data = df_perf_summary, aes(x = resolution, y = PPV_mean), color = "gray") +
-  geom_point(data = df_perf_summary, aes(x = resolution, y = PPV_mean), color = "gray", size = 1) +
-  geom_errorbar(data = df_perf_summary, aes(x = resolution, y = PPV_mean, ymin = PPV_mean-PPV_sd, ymax = PPV_mean+PPV_sd), color = "gray", width = 10) +
+  geom_point(data = df_perf_summary, aes(x = resolution, y = PPV_mean), color = "gray", size = 2) +
+  geom_errorbar(data = df_perf_summary, aes(x = resolution, y = PPV_mean, ymin = PPV_mean-PPV_sd, ymax = PPV_mean+PPV_sd), color = "gray", width = 5) +
+  geom_line() +
+  geom_point(aes(shape = prop_vote), size = 2) +
+  scale_color_manual(values = col_ppv) +
+  scale_x_continuous(breaks = unique(df_plt$resolution)) +
   ylim(0,1) +
-  labs(x = "Rasterization\nResolution",
-       col = "Required % of votes\n(n = 10)",
-       shape = "Required % of votes\n(n = 10)") +
-  theme_bw()
+  labs(title = "PPV",
+       x = "Rasterization\nResolution",
+       col = "Required votes/total permutations",
+       shape = "Required votes/total permutations") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_voting_ppv.pdf")))
 
 ggplot(df_plt, aes(x = resolution, y = TNR, col = prop_vote)) +
-  geom_line() +
-  geom_point() +
   geom_line(data = df_perf_summary, aes(x = resolution, y = TNR_mean), color = "gray") +
-  geom_point(data = df_perf_summary, aes(x = resolution, y = TNR_mean), color = "gray", size = 1) +
-  geom_errorbar(data = df_perf_summary, aes(x = resolution, y = TNR_mean, ymin = TNR_mean-TNR_sd, ymax = TNR_mean+TNR_sd), color = "gray", width = 10) +
+  geom_point(data = df_perf_summary, aes(x = resolution, y = TNR_mean), color = "gray", size = 2) +
+  geom_errorbar(data = df_perf_summary, aes(x = resolution, y = TNR_mean, ymin = TNR_mean-TNR_sd, ymax = TNR_mean+TNR_sd), color = "gray", width = 5) +
+  geom_line() +
+  geom_point(aes(shape = prop_vote), size = 2) +
+  scale_color_manual(values = col_tnr) +
+  scale_x_continuous(breaks = unique(df_plt$resolution)) +
   ylim(0,1) +
-  labs(x = "Rasterization\nResolution",
-       col = "Required % of votes\n(n = 10)",
-       shape = "Required % of votes\n(n = 10)") +
-  theme_bw()
+  labs(title = "TNR",
+       x = "Rasterization\nResolution",
+       col = "Required votes/total permutations",
+       shape = "Required votes/total permutations") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_voting_tnr.pdf")))
+
+
 
 # set a threshold p value
 alpha <- 0.05
@@ -1699,7 +1729,7 @@ ggplot(df, aes(x = resolution, y = num_points, col = resolution, label = num_poi
   )
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_num_points.pdf")), width = 6, heigh = 5, dpi = 300)
 
-## Supplementary Figure x (performance comparison between SEraster, geometric sketching, and uniform sampling)
+## Figure 2x (performance comparison between SEraster, geometric sketching, and uniform sampling)
 # set resolution parameters
 start_res <- 50
 end_res <- 400
@@ -1827,6 +1857,8 @@ perf_somde <- do.call(rbind, lapply(res_list, function(res) {
 # combine
 perf_comb <- rbind(perf_rast, perf_sketch, perf_uniform, perf_somde)
 
+col_method_comparison <- dittoSeq::dittoColors(reps = 1)[4:7]
+
 for (metric in metrics) {
   print(paste0("Plotting ", metric))
   
@@ -1834,36 +1866,48 @@ for (metric in metrics) {
   
   df_summary <- df %>%
     group_by(method, resolution) %>%
-    summarize(mean = mean(values), sd = sd(values))
+    summarize(mean = mean(values), sd = sd(values)) %>%
+    mutate(method = factor(case_when(
+      method == "geometric_sketching" ~ "Geometric Sketching",
+      method == "uniform" ~ "Uniform",
+      method == "somde" ~ "SOMDE",
+      TRUE ~ method
+    ), levels = c("SEraster", "SOMDE", "Geometric Sketching", "Uniform")))
   
   # plot
   if (metric %in% c("TP", "FP", "TN", "FN")) {
     set.seed(0)
-    ggplot(df, aes(x = resolution, y = values, col = method)) +
-      geom_jitter(width = 5, alpha = 0.3, size = 2, stroke = 0) +
-      geom_line(data = df_summary, aes(x = resolution, y = mean, col = method)) +
-      geom_point(data = df_summary, aes(x = resolution, y = mean, col = method), size = 1) +
+    ggplot(df_summary, aes(x = resolution, y = mean, col = method, shape = method)) +
+      # geom_jitter(data = df, aes(x = resolution, y = values, col = method), width = 5, alpha = 0.3, size = 2, stroke = 0) +
+      geom_line() +
+      geom_point(size = 2) +
       geom_errorbar(data = df_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = method), width = 5) +
+      scale_color_manual(values = col_method_comparison) +
       # scale_x_continuous(breaks = unique(df$resolution)) +
       labs(title = metric,
            x = "Rasterization Resolution",
            y = "Performance",
-           col = "Sampling Method") +
-      theme_bw()
+           col = "Sampling Method",
+           shape = "Sampling Method") +
+      theme_bw() +
+      theme(legend.position = "bottom")
   } else {
     set.seed(0)
-    ggplot(df, aes(x = resolution, y = values, col = method)) +
-      geom_jitter(width = 5, alpha = 0.3, size = 2, stroke = 0) +
-      geom_line(data = df_summary, aes(x = resolution, y = mean, col = method)) +
-      geom_point(data = df_summary, aes(x = resolution, y = mean, col = method), size = 1) +
+    ggplot(df_summary, aes(x = resolution, y = mean, col = method, shape = method)) +
+      # geom_jitter(data = df, aes(x = resolution, y = values, col = method), width = 5, alpha = 0.3, size = 2, stroke = 0) +
+      geom_line() +
+      geom_point(size = 2) +
       geom_errorbar(data = df_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = method), width = 5) +
+      scale_color_manual(values = col_method_comparison) +
       # scale_x_continuous(breaks = unique(df$resolution)) +
       ylim(0,1) +
       labs(title = metric,
            x = "Rasterization Resolution",
            y = "Performance",
-           col = "Sampling Method") +
-      theme_bw()
+           col = "Sampling Method",
+           shape = "Sampling Method") +
+      theme_bw() +
+      theme(legend.position = "bottom")
   }
   
   # save plot
