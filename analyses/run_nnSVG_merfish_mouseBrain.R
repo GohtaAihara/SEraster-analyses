@@ -689,7 +689,7 @@ for (res in res_list) {
 
 ## Figure 2a (spatial plots)
 # res <- list("singlecell", 50, 100, 200, 400)
-res_list <- c("singlecell")
+res_list <- c(50, 100, 200, 400)
 
 for (res in res_list) {
   if (res == "singlecell") {
@@ -729,7 +729,7 @@ for (res in res_list) {
       )
   } 
   ## save plot
-  ggsave(plot = plt, filename = here("plots", dataset_name, paste0(dataset_name, "_lognorm_mean_", res, ".pdf")))
+  ggsave(plot = plt, filename = here("plots", dataset_name, paste0(dataset_name, "_lognorm_mean", res, ".pdf")))
 }
 
 ## Figure 2c (runtime and memory comparison)
@@ -1365,7 +1365,7 @@ ggplot(df_plt, aes(x = resolution, y = TPR, col = prop_vote)) +
        shape = "Required votes/total permutations") +
   theme_bw() +
   theme(legend.position = "bottom")
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_voting_tpr.pdf")))
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_voting_tpr.pdf")), width = 8, height = 5, dpi = 300)
 
 ggplot(df_plt, aes(x = resolution, y = PPV, col = prop_vote)) +
   geom_line(data = df_perf_summary, aes(x = resolution, y = PPV_mean), color = "gray") +
@@ -1382,7 +1382,7 @@ ggplot(df_plt, aes(x = resolution, y = PPV, col = prop_vote)) +
        shape = "Required votes/total permutations") +
   theme_bw() +
   theme(legend.position = "bottom")
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_voting_ppv.pdf")))
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_voting_ppv.pdf")), width = 8, height = 5, dpi = 300)
 
 ggplot(df_plt, aes(x = resolution, y = TNR, col = prop_vote)) +
   geom_line(data = df_perf_summary, aes(x = resolution, y = TNR_mean), color = "gray") +
@@ -1399,7 +1399,7 @@ ggplot(df_plt, aes(x = resolution, y = TNR, col = prop_vote)) +
        shape = "Required votes/total permutations") +
   theme_bw() +
   theme(legend.position = "bottom")
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_voting_tnr.pdf")))
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_voting_tnr.pdf")), width = 8, height = 5, dpi = 300)
 
 
 
@@ -1890,7 +1890,7 @@ for (metric in metrics) {
            col = "Sampling Method",
            shape = "Sampling Method") +
       theme_bw() +
-      theme(legend.position = "bottom")
+      theme(legend.position = "right")
   } else {
     set.seed(0)
     ggplot(df_summary, aes(x = resolution, y = mean, col = method, shape = method)) +
@@ -1907,11 +1907,11 @@ for (metric in metrics) {
            col = "Sampling Method",
            shape = "Sampling Method") +
       theme_bw() +
-      theme(legend.position = "bottom")
+      theme(legend.position = "right")
   }
   
   # save plot
-  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_comparison_across_sampling_methods_", metric, ".pdf")))
+  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_comparison_across_sampling_methods_", metric, ".pdf")), width = 9, height = 4, dpi = 300)
 }
 
 ## assess which genes contribute to the difference

@@ -23,6 +23,7 @@ library(tibble)
 library(dplyr)
 library(reshape)
 library(DescTools)
+library(ComplexHeatmap)
 
 par(mfrow=c(1,1))
 
@@ -134,7 +135,7 @@ for (res in res_list) {
 
 # Plot --------------------------------------------------------------------
 
-## single cell visualizations
+## Figure 3a (single cell visualizations)
 col_clu <- gg_color_hue(length(levels(ct_labels)))
 names(col_clu) <- levels(ct_labels)
 
@@ -144,7 +145,7 @@ for (donor in donors) {
     df <- data.frame(spatialCoords(spe), celltype = colData(spe)$Cell.Type)
     ggplot(df, aes(x = x, y = y, col = celltype)) +
       coord_fixed() +
-      geom_point(size = 0.5, stroke = 0) +
+      rasterise(geom_point(size = 0.5, stroke = 0), dpi = 300) +
       scale_color_manual(name = "Cell type", values = col_clu) +
       guides(col = guide_legend(override.aes = list(size = 3))) +
       labs(title = paste0("Donor: ", donor, ", Tissue: ", tissue_location)) +
@@ -158,6 +159,312 @@ for (donor in donors) {
     ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_sc_ct_donor_", donor, "_tissue_", tissue_location, ".pdf")))
   }
 }
+
+## Figure 3c (rasterized visualizations)
+## "CL" dataset in Fig. 3 of the original paper
+donor <- "B006"
+tissue_location <- "Ascending"
+resolution <- 50
+spe_rast <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_rasterized_resolution_", resolution, "_binarized.RDS")))
+ct_interest <- "Enterocyte"
+plotRaster(spe_rast, assay_name = "pixelval", feature_name = ct_interest, showLegend = TRUE , name = "cells/pixel", option = "inferno", breaks = scales::pretty_breaks()) +
+  theme(legend.position = "bottom")
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_rasterized_ct_donor_", donor, "_tissue_", tissue_location, "_resolution_", resolution, "_pixelval_ct_", ct_interest, ".pdf")))
+plotRaster(spe_rast, assay_name = "re", feature_name = ct_interest, showLegend = TRUE , name = "RE", option = "inferno") +
+  theme(legend.position = "bottom")
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_rasterized_ct_donor_", donor, "_tissue_", tissue_location, "_resolution_", resolution, "_re_ct_", ct_interest, ".pdf")))
+plotRaster(spe_rast, assay_name = "bin", feature_name = ct_interest, factor_levels = c(0,1), showLegend = TRUE , name = "Binarized", option = "inferno") +
+  theme(legend.position = "bottom")
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_rasterized_ct_donor_", donor, "_tissue_", tissue_location, "_resolution_", resolution, "_bin_ct_", ct_interest, ".pdf")))
+
+
+## Figure 3d-x
+df_res_k <- data.frame(resolution = c(50, 300, 400), k = c(9, 6, 6))
+# hclust_methods <- c("complete", "ward.D2")
+hclust_methods <- c("complete")
+
+for (i in seq(nrow(df_res_k))) {
+  res <- df_res_k[i,]$resolution
+  k <- df_res_k[i,]$k
+  print(res)
+  print(k)
+  
+  df <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+  
+  ## create symmetric data
+  df_flipped <- df[df$celltypeA != df$celltypeB,]
+  df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
+  df_sym <- rbind(df, df_flipped)
+  
+  ## reset label order
+  df_sym <- df_sym %>%
+    mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
+           celltypeB = factor(celltypeB, levels(ct_labels)),
+           significance = case_when(pval <= 0.05 ~ "*", pval > 0.05 ~ ""))
+  
+  for (hclust_method in hclust_methods) {
+    df_plt <- as.matrix(cast(df_sym, celltypeA ~ celltypeB, value = "alpha"))
+    df_plt_sig <- as.matrix(cast(df_sym, celltypeA ~ celltypeB, value = "significance"))
+    
+    # cluster with hclust
+    hc_sym <- hclust(dist(df_plt), method = hclust_method)
+    # plot dendrogram
+    plot(hc_sym, labels = rownames(df_plt))
+    rect.hclust(hc_sym, k = k, border = "red")
+    # get niches
+    niches <- cutree(hc_sym, k = k)
+    names(niches) <- rownames(df_plt)
+    
+    set.seed(0)
+    heatmap <- ComplexHeatmap::Heatmap(
+      df_plt,
+      row_title = "Cell-type A",
+      column_title = "Cell-type B",
+      clustering_distance_rows = "euclidean",
+      clustering_method_rows = hclust_method,
+      clustering_distance_columns = "euclidean",
+      clustering_method_columns = hclust_method,
+      row_names_side = "left",
+      column_names_side = "top",
+      heatmap_legend_param = list(title = "Alpha MLE"),
+      column_split = k,
+      row_order = hc_sym$order,
+      show_row_dend = FALSE,
+      column_gap = unit(2.5, "mm"),
+      bottom_annotation = HeatmapAnnotation(foo = anno_block(gp = gpar(fill = gg_color_hue(k)),
+                                                             labels = unique(niches[hc_sym$order]),
+                                                             labels_gp = gpar(col = "black", fontsize = 12))),
+      cell_fun = function(j, i, x, y, width, height, fill) {
+        grid::grid.text(df_plt_sig[i, j], x = x, y = y, just = "center", gp = grid::gpar(col = "black", cex = 2.5))
+      }
+    )
+    tidyHeatmap::save_pdf(heatmap, filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_heatmap_resolution_", res, "hclust_method_", hclust_method, ".pdf")), width = 12, height = 12)
+    
+    # plot single-cell visualizations of cell-types in each niche
+    df <- data.frame(spatialCoords(spe))
+    for (i in unique(niches)) {
+      ## subset by clusters
+      spe_sub <- spe[,spe$Cell.Type %in% names(niches[niches == i])]
+
+      ## plot
+      df_sub <- data.frame(x = spatialCoords(spe_sub)[,1], y = spatialCoords(spe_sub)[,2], celltype = colData(spe_sub)$Cell.Type)
+      ggplot(df, aes(x = x, y = y)) +
+        coord_fixed() +
+        rasterise(geom_point(color = "lightgray", size = 0.5, stroke = 0), dpi = 300) +
+        rasterise(geom_point(data = df_sub, aes(x = x, y = y, col = celltype), size = 0.5, stroke = 0), dpi = 300) +
+        scale_color_manual(values = col_clu[names(niches[niches == i])]) +
+        guides(col = guide_legend(override.aes = list(size = 3))) +
+        # scale_color_manual(name = "Clusters", values = gg_color_hue(67)) +
+        labs(title = paste0("Donor: ", donor, ", Tissue: ", tissue_location, "\nNiche ", i),
+             x = "x (um)",
+             y = "y (um)",
+             col = "Cell type") +
+        theme_bw() +
+        theme(
+          legend.position = "bottom",
+          panel.grid = element_blank(),
+          axis.title = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank(),
+        )
+      ggsave(filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_singlecell_niche_", i, ".pdf")), dpi = 300)
+    }
+    
+    # plot single-cell visualizations of niches
+    df_niches <- data.frame(Cell.Type = names(niches), niche = niches)
+    rownames(df_niches) <- NULL
+    df <- data.frame(spatialCoords(spe), colData(spe)) %>%
+      left_join(df_niches, by = "Cell.Type") %>%
+      mutate(niche = factor(niche))
+    
+    ggplot(df, aes(x = x, y = y)) +
+      coord_fixed() +
+      rasterise(geom_point(color = "lightgray", size = 0.5, stroke = 0), dpi = 300) +
+      rasterise(geom_point(data = df, aes(x = x, y = y, col = niche), size = 0.5, stroke = 0), dpi = 300) +
+      guides(col = guide_legend(override.aes = list(size = 3))) +
+      # scale_color_manual(name = "Clusters", values = gg_color_hue(67)) +
+      labs(title = paste0("Donor: ", donor, ", Tissue: ", tissue_location),
+           x = "x (um)",
+           y = "y (um)",
+           col = "Niche") +
+      theme_bw() +
+      theme(
+        # legend.position = "bottom",
+        panel.grid = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+      )
+    ggsave(filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_singlecell_niches_summary.pdf")), dpi = 300)
+    
+    # plot niches vs. neighborhood
+    # compute counts/proportions of neighborhoods in the entire dataset
+    count_neighborhood_in_all <- df %>%
+      group_by(Neighborhood) %>%
+      summarise(count_neighborhood_in_all = n())
+    
+    prop_neighborhood_in_all <- df %>%
+      group_by(Neighborhood) %>%
+      summarise(prop_neighborhood_in_all = n()/dim(df)[1])
+    
+    # compute counts/proportions of niches in the entire dataset
+    count_cells_in_niche <- df %>%
+      group_by(niche) %>%
+      summarise(count_cells_in_niche = n())
+    
+    # compute total cells in each neighborhood for a given niche
+    count_neighborhood_in_niche <- df %>%
+      group_by(niche, Neighborhood) %>%
+      summarise(count_neighborhood_in_niche = n())
+    
+    # compute fold change
+    df_plt <- count_neighborhood_in_niche %>%
+      left_join(count_cells_in_niche, by = "niche") %>%
+      left_join(prop_neighborhood_in_all, by = "Neighborhood") %>%
+      mutate(prop_neighborhood_in_niche = count_neighborhood_in_niche / count_cells_in_niche,
+             fold_change = (count_neighborhood_in_niche / count_cells_in_niche) / prop_neighborhood_in_all) %>%
+      mutate(log2fold_change = log2(fold_change)) %>%
+      select(niche, Neighborhood, log2fold_change) %>%
+      spread(Neighborhood, log2fold_change) %>%
+      column_to_rownames(var = "niche")
+    
+    heatmap <- ComplexHeatmap::Heatmap(
+      as.matrix(df_plt),
+      name = "log2(fold enrichment)",
+      row_title = "Niches",
+      column_title = "Neighborhoods",
+      show_row_dend = FALSE,
+      show_column_dend = FALSE
+    )
+    tidyHeatmap::save_pdf(heatmap, filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_niches_vs_neighborhoods_resolution_", res, "hclust_method_", hclust_method, ".pdf")))
+    
+    # plot niches vs. communities
+    # compute counts/proportions of communities in the entire dataset
+    count_community_in_all <- df %>%
+      group_by(Community) %>%
+      summarise(count_community_in_all = n())
+    
+    prop_community_in_all <- df %>%
+      group_by(Community) %>%
+      summarise(prop_community_in_all = n()/dim(df)[1])
+    
+    # compute counts/proportions of niches in the entire dataset
+    count_cells_in_niche <- df %>%
+      group_by(niche) %>%
+      summarise(count_cells_in_niche = n())
+    
+    # compute total cells in each neighborhood for a given niche
+    count_community_in_niche <- df %>%
+      group_by(niche, Community) %>%
+      summarise(count_community_in_niche = n())
+    
+    # compute fold change
+    df_plt <- count_community_in_niche %>%
+      left_join(count_cells_in_niche, by = "niche") %>%
+      left_join(prop_community_in_all, by = "Community") %>%
+      mutate(prop_community_in_niche = count_community_in_niche / count_cells_in_niche,
+             fold_change = (count_community_in_niche / count_cells_in_niche) / prop_community_in_all) %>%
+      mutate(log2fold_change = log2(fold_change)) %>%
+      select(niche, Community, log2fold_change) %>%
+      spread(Community, log2fold_change) %>%
+      column_to_rownames(var = "niche")
+    
+    heatmap <- ComplexHeatmap::Heatmap(
+      as.matrix(df_plt),
+      name = "log2(fold enrichment)",
+      row_title = "Niches",
+      column_title = "Communities",
+      show_row_dend = FALSE,
+      show_column_dend = FALSE
+    )
+    tidyHeatmap::save_pdf(heatmap, filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_niches_vs_communities_resolution_", res, "hclust_method_", hclust_method, ".pdf")))
+    
+    # plot niches vs. tissue units
+    # compute counts/proportions of communities in the entire dataset
+    count_tissueunit_in_all <- df %>%
+      group_by(Tissue.Unit) %>%
+      summarise(count_tissueunit_in_all = n())
+    
+    prop_tissueunit_in_all <- df %>%
+      group_by(Tissue.Unit) %>%
+      summarise(prop_tissueunit_in_all = n()/dim(df)[1])
+    
+    # compute counts/proportions of niches in the entire dataset
+    count_cells_in_niche <- df %>%
+      group_by(niche) %>%
+      summarise(count_cells_in_niche = n())
+    
+    # compute total cells in each neighborhood for a given niche
+    count_tissueunit_in_niche <- df %>%
+      group_by(niche, Tissue.Unit) %>%
+      summarise(count_tissueunit_in_niche = n())
+    
+    # compute fold change
+    df_plt <- count_tissueunit_in_niche %>%
+      left_join(count_cells_in_niche, by = "niche") %>%
+      left_join(prop_tissueunit_in_all, by = "Tissue.Unit") %>%
+      mutate(prop_tissueunit_in_niche = count_tissueunit_in_niche / count_cells_in_niche,
+             fold_change = (count_tissueunit_in_niche / count_cells_in_niche) / prop_tissueunit_in_all) %>%
+      mutate(log2fold_change = log2(fold_change)) %>%
+      select(niche, Tissue.Unit, log2fold_change) %>%
+      spread(Tissue.Unit, log2fold_change) %>%
+      column_to_rownames(var = "niche")
+    
+    heatmap <- ComplexHeatmap::Heatmap(
+      as.matrix(df_plt),
+      name = "log2(fold enrichment)",
+      row_title = "Niches",
+      column_title = "Tissue Units",
+      show_row_dend = FALSE,
+      show_column_dend = FALSE
+    )
+    tidyHeatmap::save_pdf(heatmap, filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_niches_vs_tissueunits_resolution_", res, "hclust_method_", hclust_method, ".pdf")))
+  }
+}
+
+## Figure x (plot dendograms and compare complete vs. ward.D2 as hclust methods)
+df_res_k <- data.frame(resolution = c(50, 300, 400), k = c(7, 6, 6))
+hclust_methods <- c("complete", "ward.D2")
+
+for (i in seq(nrow(df_res_k))) {
+  res <- df_res_k[i,]$resolution
+  k <- df_res_k[i,]$k
+  
+  df <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+  
+  ## create symmetric data
+  df_flipped <- df[df$celltypeA != df$celltypeB,]
+  df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
+  df_sym <- rbind(df, df_flipped)
+  
+  ## reset label order
+  df_sym <- df_sym %>%
+    mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
+           celltypeB = factor(celltypeB, levels(ct_labels)))
+  
+  niches_compare <- do.call(cbind, lapply(hclust_methods, function(hclust_method) {
+    df_plt <- as.matrix(cast(df_sym, celltypeA ~ celltypeB, value = "alpha"))
+    
+    # cluster with hclust
+    hc_sym <- hclust(dist(df_plt), method = hclust_method)
+    
+    # plot dendrogram
+    pdf(file = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_dendogram_resolution_", res, "hclust_method_", hclust_method, ".pdf")))
+    plot(hc_sym, labels = rownames(df_plt))
+    dev.off()
+    
+    # get niches
+    niches <- cutree(hc_sym, k = k)
+    names(niches) <- rownames(df_plt)
+    
+    return(niches)
+  }))
+  colnames(niches_compare) <- hclust_methods
+  
+  print(paste0("Resolution: ", res, ", k = ", k))
+  print(niches_compare)
+}
+
 
 ## Figure 3c (heatmaps)
 res_list <- c(10, 25, 75, 50, 100, 150, 200, 300, 400)
@@ -218,7 +525,7 @@ niches <- list(
 names(niches) <- paste0("niche ", seq_along(niches))
 
 # identify niches using dendrogram
-res <- 400
+res <- 300
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
 ## create symmetric data
 df_flipped <- df[df$celltypeA != df$celltypeB,]
@@ -238,7 +545,7 @@ isSymmetric.matrix(as.matrix(df_heatmap_sym))
 hc_sym_interest <- hclust(dist(df_heatmap_sym))
 # plot dendrogram
 plot(hc_sym_interest, labels = rownames(df_heatmap_sym))
-k_select <- 6
+k_select <- 5
 rect.hclust(hc_sym_interest, k = k_select, border = "red")
 # get niches
 niches <- cutree(hc_sym_interest, k = k_select)
