@@ -185,7 +185,7 @@ spe_rast <- try({
 animal <- 1
 sex <- "Female"
 behavior <- "Naive"
-bregma <- "0.26"
+bregma <- 
 
 animals <- unique(data$Animal_ID)
 sexes <- unique(data$Animal_sex)
@@ -193,7 +193,7 @@ bregmas <- unique(data$Bregma)
 
 df_perf_all <- data.frame()
 df_perf_all2 <- data.frame()
- 
+
 # there are 83 unique conditions       
 for (animal in animals) {
   for (sex in sexes) {
@@ -232,10 +232,10 @@ for (animal in animals) {
                 temp <- df_perf[df_perf$resolution == res, metric]
                 return(data.frame(metrics = metric, mean = mean(temp), sd = sd(temp)))
               }))
-              return(data.frame(resolution = as.numeric(res), out))
+              return(data.frame(animal = animal, sex = sex, bregma = bregma, resolution = as.numeric(res), out))
             }))
             
-            #df_perf_all <- do.call(rbind, df_perf_summary)
+            # <- do.call(rbind, df_perf_summary)
             df_perf_all <- rbind(df_perf_all, df_perf_summary)
             
             df_perf2 <- df_perf %>%
@@ -243,9 +243,9 @@ for (animal in animals) {
               select(resolution, TPR, TNR, PPV) %>%
               pivot_longer(!resolution, names_to = "metrics", values_to = "values")
             
-            #df_perf_all2 <- do.call(rbind, df_perf2)
+            #2 <- do.call(rbind, df_perf2)
             df_perf_all2 <- rbind(df_perf_all2, df_perf2)
-            #df_perf_all2 <-df_perf %>%
+            #2 <-df_perf %>%
               # mutate(resolution = as.numeric(resolution)) %>%
               # select(resolution, TPR, TNR, PPV) %>%
               # pivot_longer(!resolution, names_to = "metrics", values_to = "values")
@@ -289,12 +289,14 @@ for (animal in animals) {
     }
   }
 }
-  
-df_perf_all <- na.omit(df_perf_all)
-#df_perf_all2 <- na.omit(df_perf_all2)
 
-df_perf_all2
-df_50TPR2 <- df_perf_all2[df_perf_all2$resolution == 50 & df_perf_all2$metrics == "TPR", ]
+
+
+# plot performance for biological replicates  -----------------------------
+
+
+df_perf_all <- na.omit(df_perf_all)
+  
 
 # 50TPR ######
 df_50TPR <- df_perf_all[df_perf_all$resolution == 50 & df_perf_all$metrics == "TPR", ]
@@ -352,7 +354,7 @@ df_perf_all_summary <- data.frame(
                        sd_100TPR, sd_100TNR, sd_100PPV,
                        sd_200TPR, sd_200TNR, sd_200PPV))
 
-# df_perf_all_summary <- df_perf_all %>%
+# df_perf_all_summary <- df_perf_all  %>%
 #   group_by(resolution, metrics) %>%
 #   summarise(mean = mean(mean), sd = sd(mean))
 
@@ -453,8 +455,131 @@ SEraster::plotRaster(rastGexp100, feature_name = "Klf4", name = "Klf4")
 SEraster::plotRaster(rastGexp200, feature_name = "Klf4", name = "Klf4")
 
 
-# plot performance for biological replicates ------------------------------
+# plot proportion of cells and non-zero expression ------------------------
 
+n_rotation <- 10
+angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
+df_nz <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+
+# genes that contribute to the difference
+alpha <- 0.05
+# get svgs, non-svgs
+svgs <- df_nz[(df_nz$resolution == "singlecell" & df_nz$padj <= alpha),]$gene # 401
+non_svgs <- df_nz[(df_nz$resolution == "singlecell" & df_nz$padj > alpha),]$gene # 82
+# label each gene as TP, TN, FP, FN
+df_perf4 <- df_nz %>%
+  mutate(confusion_matrix = case_when(
+    gene %in% svgs & padj <= alpha ~ "TP",
+    gene %in% non_svgs & padj > alpha ~ "TN",
+    gene %in% non_svgs & padj <= alpha ~ "FP",
+    gene %in% svgs & padj > alpha ~ "FN"
+  )) %>%
+  select(resolution, rotation_deg, gene, padj, confusion_matrix)
+# sanity check
+test <- df_perf4[df_perf4$resolution == "singlecell",]
+test_svgs <- test[test$confusion_matrix %in% c("TP", "FN"),]$gene
+length(test_svgs)
+setdiff(test_svgs, svgs)
+test_non_svgs <- test[test$confusion_matrix %in% c("FP", "TN"),]$gene
+## [1] "Avpr2"   "Cyp26a1" "Slc17a7" "Ttn"    
+length(test_non_svgs)
+setdiff(test_non_svgs, non_svgs)
+
+## evaluate the relationship between p-value and proportion of cells with non-zero expression for each gene (point) for each resolution/permutation
+# create data.frame with number and proportion of cells with non-zero expression for each gene
+
+counts <- assay(spe, "volnorm") #volnorm or lognorm?
+counts_bin <- as.matrix((counts > 0)*1)
+df_nonzero <- data.frame(count = rowSums(counts_bin), proportion = rowSums(counts_bin)/dim(counts_bin)[2]) %>%
+  rownames_to_column(var = "gene")
+# sanity check
+gene <- "Ttn" #"Vmn1r53"
+length(which(counts[gene,] > 0))
+df_nonzero[df_nonzero$gene == gene,]
+# plot single cell resolution
+df_plt <- cbind(df_nonzero, df_perf4[df_perf4$resolution == "singlecell",c("padj", "confusion_matrix")]) %>%
+  mutate(confusion_matrix = factor(confusion_matrix, levels = c("TP", "TN", "FP", "FN")))
+ggplot(df_plt, aes(x = proportion, y = -log10(padj), col = confusion_matrix)) +
+  geom_point() +
+  geom_hline(yintercept = -log10(alpha), linetype = "dashed", color = "black") +
+  labs(title = "single cell",
+       x = "Proportion of cells with non-zero expression",
+       y = "-log10(adjusted p-value)",
+       col = "Confusion matrix\nlabel") +
+  theme_bw()
+# plot rasterized resolution
+df_perf4_rast <- df_perf4[df_perf4$resolution != "singlecell",]
+for (deg in unique(df_perf4_rast$rotation_deg)) {
+  df_plt <- do.call(rbind, lapply(unique(df_perf4_rast$resolution), function(res) {
+    temp <- data.frame(resolution = res, rotation_deg = deg, df_nonzero, df_perf4_rast[df_perf4_rast$resolution == res & df_perf4_rast$rotation_deg == deg, c("padj", "confusion_matrix")]) %>%
+      mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400")),
+             confusion_matrix = factor(confusion_matrix, levels = c("TP", "TN", "FP", "FN")))
+  }))
+  ggplot(df_plt, aes(x = proportion, y = -log10(padj), col = confusion_matrix)) +
+    facet_wrap(~resolution) +
+    geom_point(size = 1.5, stroke = 0) +
+    geom_hline(yintercept = -log10(alpha), linetype = "dashed", color = "black") +
+    labs(title = paste0("Rotated at ", deg, " degrees"),
+         x = "Proportion of cells with non-zero expression",
+         y = "-log10(adjusted p-value)",
+         col = "Confusion matrix\nlabel") +
+    theme_bw()
+  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_proportion_vs_pval_rotation_deg_", deg, ".png")))
+  ggplot(df_plt, aes(x = count, y = -log10(padj), col = confusion_matrix)) +
+    facet_wrap(~resolution) +
+    geom_point(size = 1.5, stroke = 0) +
+    geom_hline(yintercept = -log10(alpha), linetype = "dashed", color = "black") +
+    labs(title = paste0("Rotated at ", deg, " degrees"),
+         x = "Number of cells with non-zero expression",
+         y = "-log10(adjusted p-value)",
+         col = "Confusion matrix\nlabel") +
+    theme_bw()
+  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_count_vs_pval_rotation_deg_", deg, ".png")))
+}
+
+# plot same bregma across animals -----------------------------------------
+
+# df_perf_all is the dataframe with everything we need
+bregma_slices <- unique(data$Bregma)
+
+for (bregma_slice in bregma_slices) {
+  # filter to get TPR
+  df_tpr <- subset(df_perf_all, metrics == "TPR" & bregma == bregma_slice)
+  ggplot(df_tpr, aes(x = factor(animal), y = (mean / 3), fill = sex)) +
+    geom_bar(stat = "identity") +
+    labs(title = paste0("TPR of bregma ", bregma_slice, " across Animal IDs"),
+         x = "Animal ID",
+         y = "TPR",
+         fill = "Sex") +
+    theme_bw() +
+    coord_cartesian(ylim = c(0, 1))
+  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_TPR ", bregma_slice, ".png")))
+  
+  # filter to get TNR
+  df_tnr <- subset(df_perf_all, metrics == "TNR" & bregma == bregma_slice)
+  ggplot(df_tnr, aes(x = factor(animal), y = (mean / 3), fill = sex)) +
+    geom_bar(stat = "identity") +
+    labs(title = paste0("TNR of bregma ", bregma_slice, " across Animal IDs"),
+         x = "Animal ID",
+         y = "TNR",
+         fill = "Sex") +
+    theme_bw() +
+      coord_cartesian(ylim = c(0, 1))
+  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_TNR ", bregma_slice, ".png")))
+  
+  # filter to get PPV
+  df_ppv <- subset(df_perf_all, metrics == "PPV" & bregma == bregma_slice)
+  ggplot(df_ppv, aes(x = factor(animal), y = (mean / 3), fill = sex)) +
+    geom_bar(stat = "identity") +
+    labs(title = paste0("PPV of bregma ", bregma_slice, " across Animal IDs"),
+         x = "Animal ID",
+         y = "PPV",
+         fill = "Sex") +
+    theme_bw() +
+    coord_cartesian(ylim = c(0, 1))
+  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_PPV ", bregma_slice, ".png")))
+  
+}
 
 # Questions ---------------------------------------------------------------
 
@@ -471,7 +596,7 @@ SEraster::plotRaster(rastGexp200, feature_name = "Klf4", name = "Klf4")
         
         
         
-        
+
         
         
         
