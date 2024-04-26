@@ -540,21 +540,46 @@ for (deg in unique(df_perf4_rast$rotation_deg)) {
 # plot same bregma across animals -----------------------------------------
 
 # df_perf_all is the dataframe with everything we need
-
 bregma_slices <- unique(data$Bregma)
 
 for (bregma_slice in bregma_slices) {
   # filter to get TPR
   df_tpr <- subset(df_perf_all, metrics == "TPR" & bregma == bregma_slice)
-  ggplot(df_tpr, aes(x = factor(animal), y = mean)) +
+  ggplot(df_tpr, aes(x = factor(animal), y = (mean / 3), fill = sex)) +
     geom_bar(stat = "identity") +
-    labs(title = paste0("TPR of bregma ", bregma_slice, " across Different Animal IDs"),
+    labs(title = paste0("TPR of bregma ", bregma_slice, " across Animal IDs"),
          x = "Animal ID",
-         y = "TPR") +
-    theme_bw()
-  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "TPR ", bregma_slice, ".png")))
+         y = "TPR",
+         fill = "Sex") +
+    theme_bw() +
+    coord_cartesian(ylim = c(0, 1))
+  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_TPR ", bregma_slice, ".png")))
+  
+  # filter to get TNR
+  df_tnr <- subset(df_perf_all, metrics == "TNR" & bregma == bregma_slice)
+  ggplot(df_tnr, aes(x = factor(animal), y = (mean / 3), fill = sex)) +
+    geom_bar(stat = "identity") +
+    labs(title = paste0("TNR of bregma ", bregma_slice, " across Animal IDs"),
+         x = "Animal ID",
+         y = "TNR",
+         fill = "Sex") +
+    theme_bw() +
+      coord_cartesian(ylim = c(0, 1))
+  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_TNR ", bregma_slice, ".png")))
+  
+  # filter to get PPV
+  df_ppv <- subset(df_perf_all, metrics == "PPV" & bregma == bregma_slice)
+  ggplot(df_ppv, aes(x = factor(animal), y = (mean / 3), fill = sex)) +
+    geom_bar(stat = "identity") +
+    labs(title = paste0("PPV of bregma ", bregma_slice, " across Animal IDs"),
+         x = "Animal ID",
+         y = "PPV",
+         fill = "Sex") +
+    theme_bw() +
+    coord_cartesian(ylim = c(0, 1))
+  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_PPV ", bregma_slice, ".png")))
+  
 }
-
 
 # Questions ---------------------------------------------------------------
 
