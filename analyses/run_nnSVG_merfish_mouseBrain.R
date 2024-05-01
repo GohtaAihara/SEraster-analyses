@@ -750,14 +750,26 @@ df_summary <- df %>%
     avg_mem_nnsvg = mean(mem_nnsvg, na.rm = TRUE),
     avg_mem_total = mean(mem_total, na.rm = TRUE)
   )
-singlecell_time <- df_summary %>%
+singlecell_time_total <- df_summary %>%
   filter(resolution == "singlecell") %>%
   select(avg_runtime_total) %>%
+  unlist()
+singlecell_time_rast <- df_summary %>%
+  filter(resolution == "singlecell") %>%
+  select(avg_runtime_rast) %>%
+  unlist()
+singlecell_time_nnsvg <- df_summary %>%
+  filter(resolution == "singlecell") %>%
+  select(avg_runtime_nnsvg) %>%
   unlist()
 df_summary <- df_summary %>%
   mutate(
     avg_runtime_total = as.numeric(avg_runtime_total),
-    percentage = avg_runtime_total / singlecell_time * 100
+    percentage_total = avg_runtime_total / singlecell_time_total * 100,
+    avg_runtime_rast = as.numeric(avg_runtime_rast),
+    percentage_rast = avg_runtime_rast / singlecell_time_rast * 100,
+    avg_runtime_nnsvg = as.numeric(avg_runtime_nnsvg),
+    percentage_nnsvg = avg_runtime_nnsvg / singlecell_time_nnsvg * 100
   )
 
 df$resolution <- factor(df$resolution, levels = c("singlecell", 50, 100, 200, 400))
@@ -768,7 +780,7 @@ ggplot(df, aes(x = resolution, y = as.numeric(runtime_total)/60, col = resolutio
   geom_boxplot(lwd = 0.5, outlier.shape = NA, linewidth = 1) +
   geom_jitter(width = 0.3, alpha = 0.75, size = 2.5, stroke = 0) +
   geom_hline(yintercept = df_summary[df_summary$resolution == "singlecell",]$avg_runtime_total/60, color = "black", linetype = "dashed") +
-  geom_text(data = df_summary, aes(x = resolution, y = as.numeric(avg_runtime_total)/60, label = paste0(round(percentage, digits = 1), "%")), vjust = -1.5, size = 5) +
+  geom_text(data = df_summary, aes(x = resolution, y = as.numeric(avg_runtime_total)/60, label = paste0(round(percentage_total, digits = 1), "%")), vjust = -1.5, size = 5) +
   scale_color_manual(values = col_res) +
   # scale_y_continuous(expand = expansion(mult = 0.1)) +
   ylim(0,150) +
@@ -782,47 +794,88 @@ ggplot(df, aes(x = resolution, y = as.numeric(runtime_total)/60, col = resolutio
         legend.position = "none")
 ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_total_", device, "_n=", n_itr, ".pdf")), width = 4, heigh = 8, dpi = 300)
 
-# total memory
-ggplot(df, aes(x = resolution, y = as.numeric(mem_total)*1e-6, col = resolution)) +
-  geom_boxplot(lwd = 0.5, outlier.shape = NA) +
-  geom_jitter(width = 0.2, alpha = 0.75) +
-  scale_color_manual(values = col_res) +
-  labs(title = "Total memory",
-       x = "Resolution",
-       y = "Memory (MB)",
+# SEraster runtime
+set.seed(0)
+ggplot(df, aes(x = resolution, y = as.numeric(runtime_rast)/60, col = resolution)) +
+  geom_boxplot(lwd = 0.5, outlier.shape = NA, linewidth = 1) +
+  geom_jitter(width = 0.3, alpha = 0.75, size = 2.5, stroke = 0) +
+  # geom_hline(yintercept = df_summary[df_summary$resolution == "singlecell",]$avg_runtime_rast/60, color = "black", linetype = "dashed") +
+  # geom_text(data = df_summary, aes(x = resolution, y = as.numeric(avg_runtime_rast)/60, label = paste0(round(percentage_rast, digits = 1), "%")), vjust = -1.5, size = 5) +
+  scale_color_manual(values = c(col_res[2:5], col_res[1])) +
+  # scale_y_continuous(expand = expansion(mult = 0.1)) +
+  ylim(0,150) +
+  labs(title = "SEraster runtime",
+       x = "Rasterization Resolution (µm)",
+       y = "Runtime (minutes)",
        col = "Resolution") +
   theme_bw() +
   theme(panel.grid.minor.x = element_blank(), 
         panel.grid.minor.y = element_blank(),
         legend.position = "none")
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_SEraster_", device, "_n=", n_itr, ".pdf")), width = 4, heigh = 8, dpi = 300)
 
-# SEraster memory
-ggplot(df, aes(x = resolution, y = as.numeric(mem_rast)*1e-6, col = resolution)) +
-  geom_boxplot(lwd = 0.5, outlier.shape = NA) +
-  geom_jitter(width = 0.2, alpha = 0.75) +
+# nnSVG runtime
+set.seed(0)
+ggplot(df, aes(x = resolution, y = as.numeric(runtime_nnsvg)/60, col = resolution)) +
+  geom_boxplot(lwd = 0.5, outlier.shape = NA, linewidth = 1) +
+  geom_jitter(width = 0.3, alpha = 0.75, size = 2.5, stroke = 0) +
+  # geom_hline(yintercept = df_summary[df_summary$resolution == "singlecell",]$avg_runtime_nnsvg/60, color = "black", linetype = "dashed") +
+  # geom_text(data = df_summary, aes(x = resolution, y = as.numeric(avg_runtime_nnsvg)/60, label = paste0(round(percentage_nnsvg, digits = 1), "%")), vjust = -1.5, size = 5) +
   scale_color_manual(values = col_res) +
-  labs(title = "SEraster memory",
-       x = "Resolution",
-       y = "Memory (MB)",
+  # scale_y_continuous(expand = expansion(mult = 0.1)) +
+  ylim(0,150) +
+  labs(title = "nnSVG runtime",
+       x = "Rasterization Resolution (µm)",
+       y = "Runtime (minutes)",
        col = "Resolution") +
   theme_bw() +
   theme(panel.grid.minor.x = element_blank(), 
         panel.grid.minor.y = element_blank(),
         legend.position = "none")
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_runtime_nnSVG_", device, "_n=", n_itr, ".pdf")), width = 4, heigh = 8, dpi = 300)
 
-# nnSVG memory
-ggplot(df, aes(x = resolution, y = as.numeric(mem_nnsvg)*1e-6, col = resolution)) +
-  geom_boxplot(lwd = 0.5, outlier.shape = NA) +
-  geom_jitter(width = 0.2, alpha = 0.75) +
-  scale_color_manual(values = col_res) +
-  labs(title = "nnSVG memory",
-       x = "Resolution",
-       y = "Memory (MB)",
-       col = "Resolution") +
-  theme_bw() +
-  theme(panel.grid.minor.x = element_blank(), 
-        panel.grid.minor.y = element_blank(),
-        legend.position = "none")
+
+# # total memory
+# ggplot(df, aes(x = resolution, y = as.numeric(mem_total)*1e-6, col = resolution)) +
+#   geom_boxplot(lwd = 0.5, outlier.shape = NA) +
+#   geom_jitter(width = 0.2, alpha = 0.75) +
+#   scale_color_manual(values = col_res) +
+#   labs(title = "Total memory",
+#        x = "Resolution",
+#        y = "Memory (MB)",
+#        col = "Resolution") +
+#   theme_bw() +
+#   theme(panel.grid.minor.x = element_blank(), 
+#         panel.grid.minor.y = element_blank(),
+#         legend.position = "none")
+# 
+# # SEraster memory
+# ggplot(df, aes(x = resolution, y = as.numeric(mem_rast)*1e-6, col = resolution)) +
+#   geom_boxplot(lwd = 0.5, outlier.shape = NA) +
+#   geom_jitter(width = 0.2, alpha = 0.75) +
+#   scale_color_manual(values = col_res) +
+#   labs(title = "SEraster memory",
+#        x = "Resolution",
+#        y = "Memory (MB)",
+#        col = "Resolution") +
+#   theme_bw() +
+#   theme(panel.grid.minor.x = element_blank(), 
+#         panel.grid.minor.y = element_blank(),
+#         legend.position = "none")
+# 
+# # nnSVG memory
+# ggplot(df, aes(x = resolution, y = as.numeric(mem_nnsvg)*1e-6, col = resolution)) +
+#   geom_boxplot(lwd = 0.5, outlier.shape = NA) +
+#   geom_jitter(width = 0.2, alpha = 0.75) +
+#   scale_color_manual(values = col_res) +
+#   labs(title = "nnSVG memory",
+#        x = "Resolution",
+#        y = "Memory (MB)",
+#        col = "Resolution") +
+#   theme_bw() +
+#   theme(panel.grid.minor.x = element_blank(), 
+#         panel.grid.minor.y = element_blank(),
+#         legend.position = "none")
 
 ## Figure 2d (performance comparison)
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global.RDS")))
@@ -1310,12 +1363,12 @@ df_perf_vote <- do.call(rbind, lapply(prop_votes, function(prop_vote) {
 df_plt <- df_perf_vote %>%
   mutate(
     prop_vote = factor(case_when(
-      prop_vote == 0.1 ~ "1/10",
-      prop_vote == 0.3 ~ "3/10",
-      prop_vote == 0.5 ~ "5/10",
-      prop_vote == 0.7 ~ "7/10",
+      prop_vote == 0.1 ~ "≥1/10",
+      prop_vote == 0.3 ~ "≥3/10",
+      prop_vote == 0.5 ~ "≥5/10",
+      prop_vote == 0.7 ~ "≥7/10",
       prop_vote == 1 ~ "10/10"
-    ), levels = (c("1/10", "3/10", "5/10", "7/10", "10/10"))),
+    ), levels = (c("≥1/10", "≥3/10", "≥5/10", "≥7/10", "10/10"))),
     resolution = as.numeric(resolution)) %>%
   select(prop_vote, resolution, TPR, TNR, PPV)
 

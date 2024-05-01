@@ -48,10 +48,10 @@ donor <- "B006"
 tissue_location <- "Ascending"
 spe <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_loc_", tissue_location, "_preprocessed.RDS")))
 
-## "SB" dataset in Fig. 3 of the original paper
-donor <- "B005"
-tissue_location <- "Proximal Jejunum"
-spe <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_loc_", tissue_location, "_preprocessed.RDS")))
+# ## "SB" dataset in Fig. 3 of the original paper
+# donor <- "B005"
+# tissue_location <- "Proximal Jejunum"
+# spe <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_loc_", tissue_location, "_preprocessed.RDS")))
 
 # Run methods -------------------------------------------------------------
 
@@ -151,6 +151,7 @@ for (donor in donors) {
       labs(title = paste0("Donor: ", donor, ", Tissue: ", tissue_location)) +
       theme_bw() +
       theme(
+        legend.position = "bottom",
         panel.grid = element_blank(),
         axis.title = element_blank(),
         axis.text = element_blank(),
@@ -164,7 +165,7 @@ for (donor in donors) {
 ## "CL" dataset in Fig. 3 of the original paper
 donor <- "B006"
 tissue_location <- "Ascending"
-resolution <- 50
+resolution <- 400
 spe_rast <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_rasterized_resolution_", resolution, "_binarized.RDS")))
 ct_interest <- "Enterocyte"
 plotRaster(spe_rast, assay_name = "pixelval", feature_name = ct_interest, showLegend = TRUE , name = "cells/pixel", option = "inferno", breaks = scales::pretty_breaks()) +
@@ -215,6 +216,34 @@ for (i in seq(nrow(df_res_k))) {
     niches <- cutree(hc_sym, k = k)
     names(niches) <- rownames(df_plt)
     
+    # pyramid shape (without split and dendrogram)
+    set.seed(0)
+    heatmap <- ComplexHeatmap::Heatmap(
+      df_plt,
+      row_title = "Cell-type A",
+      column_title = "Cell-type B",
+      clustering_distance_rows = "euclidean",
+      clustering_method_rows = hclust_method,
+      clustering_distance_columns = "euclidean",
+      clustering_method_columns = hclust_method,
+      row_names_side = "left",
+      column_names_side = "top",
+      heatmap_legend_param = list(title = "Alpha MLE"),
+      column_split = k,
+      row_order = hc_sym$order,
+      show_row_dend = FALSE,
+      column_gap = unit(2.5, "mm"),
+      bottom_annotation = HeatmapAnnotation(foo = anno_block(gp = gpar(fill = gg_color_hue(k)),
+                                                             labels = unique(niches[hc_sym$order]),
+                                                             labels_gp = gpar(col = "black", fontsize = 12))),
+      cell_fun = function(j, i, x, y, width, height, fill) {
+        grid::grid.text(df_plt_sig[i, j], x = x, y = y, just = "center", gp = grid::gpar(col = "black", cex = 2.5))
+      }
+    )
+    tidyHeatmap::save_pdf(heatmap, filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_heatmap_resolution_", res, "hclust_method_", hclust_method, "_pyramid.pdf")), width = 12, height = 12)
+    
+    
+    # square shape (with split and dendrogram)
     set.seed(0)
     heatmap <- ComplexHeatmap::Heatmap(
       df_plt,
@@ -252,6 +281,7 @@ for (i in seq(nrow(df_res_k))) {
         coord_fixed() +
         rasterise(geom_point(color = "lightgray", size = 0.5, stroke = 0), dpi = 300) +
         rasterise(geom_point(data = df_sub, aes(x = x, y = y, col = celltype), size = 0.5, stroke = 0), dpi = 300) +
+        geom_rect(aes(xmin = 11700, xmax = 13800, ymin = 15600, ymax = 16400), color = "black", fill = NA, linetype = "solid") +
         scale_color_manual(values = col_clu[names(niches[niches == i])]) +
         guides(col = guide_legend(override.aes = list(size = 3))) +
         # scale_color_manual(name = "Clusters", values = gg_color_hue(67)) +
@@ -329,12 +359,16 @@ for (i in seq(nrow(df_res_k))) {
       column_to_rownames(var = "niche")
     
     heatmap <- ComplexHeatmap::Heatmap(
-      as.matrix(df_plt),
+      t(as.matrix(df_plt)),
       name = "log2(fold enrichment)",
-      row_title = "Niches",
-      column_title = "Neighborhoods",
+      row_title = "Neighborhoods",
+      row_names_side = "left",
+      column_title = "Niches",
+      column_title_side = "bottom",
+      column_names_rot = 0,
       show_row_dend = FALSE,
-      show_column_dend = FALSE
+      show_column_dend = FALSE,
+      column_order = rownames(df_plt)
     )
     tidyHeatmap::save_pdf(heatmap, filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_niches_vs_neighborhoods_resolution_", res, "hclust_method_", hclust_method, ".pdf")))
     
@@ -370,12 +404,16 @@ for (i in seq(nrow(df_res_k))) {
       column_to_rownames(var = "niche")
     
     heatmap <- ComplexHeatmap::Heatmap(
-      as.matrix(df_plt),
+      t(as.matrix(df_plt)),
       name = "log2(fold enrichment)",
-      row_title = "Niches",
-      column_title = "Communities",
+      row_title = "Communities",
+      row_names_side = "left",
+      column_title = "Niches",
+      column_title_side = "bottom",
+      column_names_rot = 0,
       show_row_dend = FALSE,
-      show_column_dend = FALSE
+      show_column_dend = FALSE,
+      column_order = rownames(df_plt)
     )
     tidyHeatmap::save_pdf(heatmap, filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_niches_vs_communities_resolution_", res, "hclust_method_", hclust_method, ".pdf")))
     
@@ -411,16 +449,216 @@ for (i in seq(nrow(df_res_k))) {
       column_to_rownames(var = "niche")
     
     heatmap <- ComplexHeatmap::Heatmap(
-      as.matrix(df_plt),
+      t(as.matrix(df_plt)),
       name = "log2(fold enrichment)",
-      row_title = "Niches",
-      column_title = "Tissue Units",
+      row_title = "Tissue Units",
+      row_names_side = "left",
+      column_title = "Niches",
+      column_title_side = "bottom",
+      column_names_rot = 0,
       show_row_dend = FALSE,
-      show_column_dend = FALSE
+      show_column_dend = FALSE,
+      column_order = rownames(df_plt)
     )
     tidyHeatmap::save_pdf(heatmap, filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_niches_vs_tissueunits_resolution_", res, "hclust_method_", hclust_method, ".pdf")))
   }
 }
+
+## Figure 3D-
+# res <- 50
+res <- 400
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+
+# create symmetric data
+df_flipped <- df[df$celltypeA != df$celltypeB,]
+df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
+df_sym <- rbind(df, df_flipped)
+
+# reset label order
+df_sym <- df_sym %>%
+  mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
+         celltypeB = factor(celltypeB, levels(ct_labels)),
+         significance = case_when(pval <= 0.05 ~ "*", pval > 0.05 ~ ""))
+
+df_plt <- as.matrix(cast(df_sym, celltypeA ~ celltypeB, value = "alpha"))
+df_plt_sig <- as.matrix(cast(df_sym, celltypeA ~ celltypeB, value = "significance"))
+
+# cluster with hclust
+hc_sym <- hclust(dist(df_plt), method = "complete")
+
+# heatmap, pyramid shape (without split and dendrogram)
+set.seed(0)
+heatmap <- ComplexHeatmap::Heatmap(
+  df_plt,
+  row_title = "Cell-type A",
+  column_title = "Cell-type B",
+  clustering_distance_rows = "euclidean",
+  clustering_method_rows = "complete",
+  clustering_distance_columns = "euclidean",
+  clustering_method_columns = "complete",
+  row_names_side = "left",
+  column_names_side = "top",
+  heatmap_legend_param = list(title = "Alpha MLE"),
+  row_order = rev(hc_sym$order),
+  column_order = hc_sym$order,
+  show_row_dend = FALSE,
+  show_column_dend = FALSE,
+  cell_fun = function(j, i, x, y, width, height, fill) {
+    grid::grid.text(df_plt_sig[i, j], x = x, y = y, just = "center", rot = 45, gp = grid::gpar(col = "black", cex = 2.5))
+  },
+  row_names_rot = 45,
+  column_names_rot = 45,
+  rect_gp = gpar(col = "white", lwd = 2),
+  show_heatmap_legend = FALSE
+)
+tidyHeatmap::save_pdf(heatmap, filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_heatmap_resolution_", res, "hclust_method_complete_pyramid.pdf")), width = 12, height = 12)
+
+# plot single-cell visualizations of cell-types in each niche
+# # resolution = 50
+# niches <- list(
+#   factor(c("CD4+ T cell", "DC", "CD8+ T", "Neutrophil"), levels = levels(ct_labels)),
+#   factor(c("Enterocyte", "Neuroendocrine", "TA"), levels = levels(ct_labels))
+# )
+# resolution = 400
+niches <- list(
+  factor(c("Stroma", "Nerve", "Smooth muscle", "Endothelial", "M2 Macrophage"), levels = levels(ct_labels)),
+  factor(c("CD7+ Immune", "CD66+ Enterocyte", "B", "Plasma", "NK", "ICC", "DC", "Lymphatic", "CD8+ T", "CD4+ T cell", "M1 Macrophage", "CD57+ Enterocyte", "Enterocyte", "Cycling TA", "TA", "Neuroendocrine", "Neutrophil", "Goblet", "MUC1+ Enterocyte"), levels = levels(ct_labels)),
+  factor(c("CD8+ T", "CD4+ T cell", "M1 Macrophage", "CD57+ Enterocyte", "Enterocyte", "Cycling TA", "TA", "Neuroendocrine", "Neutrophil", "Goblet", "MUC1+ Enterocyte"), levels = levels(ct_labels))
+)
+
+for (i in seq_along(niches)) {
+  df <- data.frame(spatialCoords(spe))
+  ## subset by clusters
+  spe_sub <- spe[,spe$Cell.Type %in% niches[[i]]]
+  
+  ## plot whole tissue
+  df_sub <- data.frame(x = spatialCoords(spe_sub)[,1], y = spatialCoords(spe_sub)[,2], celltype = colData(spe_sub)$Cell.Type)
+  ggplot(df, aes(x = x, y = y)) +
+    coord_fixed() +
+    rasterise(geom_point(color = "lightgray", size = 1, stroke = 0), dpi = 300) +
+    rasterise(geom_point(data = df_sub, aes(x = x, y = y, col = celltype), size = 1, stroke = 0), dpi = 300) +
+    geom_rect(aes(xmin = 11700, xmax = 13800, ymin = 15600, ymax = 16400), color = "black", fill = NA, linetype = "solid") +
+    scale_color_manual(values = col_clu[niches[[i]]]) +
+    guides(col = guide_legend(override.aes = list(size = 3))) +
+    # scale_color_manual(name = "Clusters", values = gg_color_hue(67)) +
+    labs(title = paste0("Donor: ", donor, ", Tissue: ", tissue_location),
+         x = "x (um)",
+         y = "y (um)",
+         col = "Cell type") +
+    theme_bw() +
+    theme(
+      legend.position = "bottom",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  # ggsave(filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_singlecell_celltypes_", paste(as.character(niches[[i]]), collapse = "_"), ".pdf")), dpi = 300)
+  ggsave(filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_singlecell_niche_", i, ".pdf")), dpi = 300)
+  
+  ## plot cloes-up
+  df <- df %>%
+    filter(x >= 11700 & x <= 13800, y >= 15600 & y <= 16400)
+  df_sub <- data.frame(x = spatialCoords(spe_sub)[,1], y = spatialCoords(spe_sub)[,2], celltype = colData(spe_sub)$Cell.Type) %>%
+    filter(x >= 11700 & x <= 13800, y >= 15600 & y <= 16400)
+  ggplot(df, aes(x = x, y = y)) +
+    coord_fixed() +
+    rasterise(geom_point(color = "lightgray", size = 4, stroke = 0), dpi = 300) +
+    rasterise(geom_point(data = df_sub, aes(x = x, y = y, col = celltype), size = 4, stroke = 0), dpi = 300) +
+    # geom_rect(aes(xmin = 11700, xmax = 13800, ymin = 15500, ymax = 16500), color = "black", fill = NA, linetype = "solid") +
+    scale_color_manual(values = col_clu[niches[[i]]]) +
+    guides(col = guide_legend(override.aes = list(size = 3))) +
+    # scale_color_manual(name = "Clusters", values = gg_color_hue(67)) +
+    labs(title = paste0("Donor: ", donor, ", Tissue: ", tissue_location),
+         x = "x (um)",
+         y = "y (um)",
+         col = "Cell type") +
+    theme_bw() +
+    theme(
+      legend.position = "none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  # ggsave(filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_singlecell_celltypes_", paste(as.character(niches[[i]]), collapse = "_"), "_closeup.pdf")), dpi = 300)
+  ggsave(filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_singlecell_niche_", i, "_closeup.pdf")), dpi = 300)
+}
+
+## Supplementary Figure 3
+
+
+
+
+## Figure x (plot close-up single cell visualizations)
+# res <- 50
+# k <- 9
+# niches_interest <- c(2,4,6)
+
+res <- 400
+k <- 6
+niches_interest <- c(2)
+
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+
+# create symmetric data
+df_flipped <- df[df$celltypeA != df$celltypeB,]
+df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
+df_sym <- rbind(df, df_flipped)
+
+# reset label order
+df_sym <- df_sym %>%
+  mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
+         celltypeB = factor(celltypeB, levels(ct_labels)),
+         significance = case_when(pval <= 0.05 ~ "*", pval > 0.05 ~ ""))
+
+df_plt <- as.matrix(cast(df_sym, celltypeA ~ celltypeB, value = "alpha"))
+df_plt_sig <- as.matrix(cast(df_sym, celltypeA ~ celltypeB, value = "significance"))
+
+# cluster with hclust
+hc_sym <- hclust(dist(df_plt), method = "complete")
+# plot dendrogram
+plot(hc_sym, labels = rownames(df_plt))
+rect.hclust(hc_sym, k = k, border = "red")
+# get niches
+niches <- cutree(hc_sym, k = k)
+names(niches) <- rownames(df_plt)
+
+# plot single-cell visualizations of cell-types in each niche
+df <- data.frame(spatialCoords(spe))
+for (i in niches_interest) {
+  ## subset by clusters
+  spe_sub <- spe[,spe$Cell.Type %in% names(niches[niches == i])]
+  
+  ## plot
+  df <- df %>%
+    filter(x >= 11700 & x <= 13800, y >= 15600 & y <= 16400)
+  df_sub <- data.frame(x = spatialCoords(spe_sub)[,1], y = spatialCoords(spe_sub)[,2], celltype = colData(spe_sub)$Cell.Type) %>%
+    filter(x >= 11700 & x <= 13800, y >= 15600 & y <= 16400)
+  ggplot(df, aes(x = x, y = y)) +
+    coord_fixed() +
+    rasterise(geom_point(color = "lightgray", size = 2.5, stroke = 0), dpi = 300) +
+    rasterise(geom_point(data = df_sub, aes(x = x, y = y, col = celltype), size = 2.5, stroke = 0), dpi = 300) +
+    # geom_rect(aes(xmin = 11700, xmax = 13800, ymin = 15500, ymax = 16500), color = "black", fill = NA, linetype = "solid") +
+    scale_color_manual(values = col_clu[names(niches[niches == i])]) +
+    guides(col = guide_legend(override.aes = list(size = 3))) +
+    # scale_color_manual(name = "Clusters", values = gg_color_hue(67)) +
+    labs(title = paste0("Donor: ", donor, ", Tissue: ", tissue_location, "\nNiche ", i),
+         x = "x (um)",
+         y = "y (um)",
+         col = "Cell type") +
+    theme_bw() +
+    theme(
+      legend.position = "none",
+      panel.grid = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+    )
+  ggsave(filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_singlecell_niche_", i, "_closeup.pdf")), dpi = 300)
+}
+
+
 
 ## Figure x (plot dendograms and compare complete vs. ward.D2 as hclust methods)
 df_res_k <- data.frame(resolution = c(50, 300, 400), k = c(7, 6, 6))
