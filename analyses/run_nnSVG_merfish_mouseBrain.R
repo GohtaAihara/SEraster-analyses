@@ -1186,20 +1186,32 @@ ggplot(df_plt, aes(x = gene, y = moran_sample01, col = resolution)) +
        y = "Moran's I",
        col = "Resolution") +
   theme_bw()
-  
-# plot (gexp at single cell/rasterized resolutions)
+
+## Supplementary Figure 2A, B (gexp of representative FP genes at single cell/rasterized resolutions)
+# rasterize for plotting
+spe_50 <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 50, fun = "mean", BPPARAM = MulticoreParam())
+spe_100 <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 100, fun = "mean", BPPARAM = MulticoreParam())
+spe_200 <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 200, fun = "mean", BPPARAM = MulticoreParam())
+spe_400 <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 400, fun = "mean", BPPARAM = MulticoreParam())
+spe_rasterized <- list(spe_50, spe_100, spe_200, spe_400)
+names(spe_rasterized) <- c("50", "100", "200", "400")
+# select genes
+genes <- c("Cxcr1", "C5ar1")
+# select resolutions
 resolutions <- c("singlecell", "50", "100", "200", "400")
 for (gene in genes) {
-  plt_list <- lapply(resolutions, function(resolution) {
+  for (resolution in resolutions) {
     if (resolution == "singlecell") {
       # construct data.frame for plotting
       df <-data.frame(spatialCoords(spe), gexp = assay(spe, "lognorm")[gene,])
+      df_sub <- df[df$gexp > 0,]
       
       # plot
-      plt <- ggplot(df, aes(x = x, y = y, col = gexp)) +
+      ggplot() +
         coord_fixed() +
-        geom_point(size = 0.5, stroke = 0) +
-        scale_color_gradient(low = 'lightgrey', high='red') + 
+        rasterise(geom_point(data = df, aes(x = x, y = y), color = "lightgrey", size = 1, stroke = 0), dpi = 300) +
+        rasterise(geom_point(data = df_sub, aes(x = x, y = y, col = gexp), size = 2, stroke = 0), dpi = 300) +
+        scale_color_gradient(low = 'lightgrey', high='red') +
         labs(title = c("single cell"),
              col = "lognorm") +
         theme_bw() +
@@ -1209,43 +1221,92 @@ for (gene in genes) {
           axis.text = element_blank(),
           axis.ticks = element_blank()
         )
-      return(plt)
     } else {
       # get spe at specified resolution
       spe_rast <- spe_rasterized[[resolution]]
       
       # plot
-      plt <- plotRaster(spe_rast, feature_name = gene, name = "pixel val", plotTitle = paste0(resolution, " um"))
-      return(plt)
+      plotRaster(spe_rast, feature_name = gene, name = "pixel val", plotTitle = paste0(resolution, " um"))
     }
-  })
-  
-  plt_comb <- gridExtra::grid.arrange(grobs = plt_list, top = gene)
-  ggsave(plt_comb, file = here("plots", dataset_name, paste0(dataset_name, "_gexp_", gene, ".png")), width = 15, height = 15, dpi = 300)
+    ggsave(file = here("plots", dataset_name, paste0(dataset_name, "_gexp_", gene, "_resolution_", resolution, ".pdf")), dpi = 300)
+  }
 }
 
-## evaluate the relationship between p-value and proportion of cells with non-zero expression for each gene (point) for each resolution/permutation
+## Supplementary Figure 2C (proportion of cells with non-zero expression vs. -log10(p-value))
+# performance comparison with rotations
+n_rotation <- 10
+angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
+# set a threshold p value
+alpha <- 0.05
+# get svgs, non-svgs
+svgs <- df[(df$resolution == "singlecell" & df$padj <= alpha),]$gene # 401
+non_svgs <- df[(df$resolution == "singlecell" & df$padj > alpha),]$gene # 82
+# add confusion matrix labels
+df_perf_cf <- df %>%
+  mutate(confusion_matrix = case_when(
+    gene %in% svgs & padj <= alpha ~ "TP",
+    gene %in% non_svgs & padj > alpha ~ "TN",
+    gene %in% non_svgs & padj <= alpha ~ "FP",
+    gene %in% svgs & padj > alpha ~ "FN"
+  )) %>%
+  select(resolution, rotation_deg, gene, padj, confusion_matrix)
 # create data.frame with number and proportion of cells with non-zero expression for each gene
 counts <- assay(spe, "counts")
 counts_bin <- as.matrix((counts > 0)*1)
 df_nonzero <- data.frame(count = rowSums(counts_bin), proportion = rowSums(counts_bin)/dim(counts_bin)[2]) %>%
   rownames_to_column(var = "gene")
-# sanity check
-gene <- "Vmn1r53"
-length(which(counts[gene,] > 0))
-df_nonzero[df_nonzero$gene == gene,]
-# plot single cell resolution
-df_plt <- cbind(df_nonzero, df_perf4[df_perf4$resolution == "singlecell",c("padj", "confusion_matrix")]) %>%
-  mutate(confusion_matrix = factor(confusion_matrix, levels = c("TP", "TN", "FP", "FN")))
-ggplot(df_plt, aes(x = proportion, y = -log10(padj), col = confusion_matrix)) +
-  geom_point() +
-  geom_hline(yintercept = -log10(alpha), linetype = "dashed", color = "black") +
-  labs(title = "single cell",
-       x = "Proportion of cells with non-zero expression",
-       y = "-log10(adjusted p-value)",
-       col = "Confusion matrix\nlabel") +
-  theme_bw()
+# select resolutions
+resolutions <- c("50", "100", "200", "400")
+# select rotation degrees
+deg <- 0
+# select genes
+genes <- c("Cxcr1", "C5ar1")
+# color blind friendly colors
+col_ditto <- dittoSeq::dittoColors(reps = 1)
+# plot
+for (resolution in resolutions) {
+  df_plt <- data.frame(resolution = resolution, rotation_deg = deg, df_nonzero, df_perf_cf[df_perf_cf$resolution == resolution & df_perf_cf$rotation_deg == deg, c("padj", "confusion_matrix")]) %>%
+    mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400")),
+           confusion_matrix = factor(confusion_matrix, levels = c("TP", "TN", "FP", "FN")))
+  df_plt_sub <- df_plt %>%
+    filter(gene %in% genes)
+  ggplot(df_plt, aes(x = proportion, y = -log10(padj), col = confusion_matrix, shape = confusion_matrix)) +
+    geom_point(size = 2) +
+    geom_point(data = df_plt_sub, aes(x = proportion, y = -log10(padj)), size = 2, shape = 0, color = "red") +
+    ggrepel::geom_text_repel(data = df_plt_sub, aes(x = proportion, y = -log10(padj), label = gene), color = "red") +
+    geom_hline(yintercept = -log10(alpha), linetype = "dashed", color = "black") +
+    scale_color_manual(values = col_ditto[1:4]) +
+    # scale_shape_manual(values = c(16, 17, 15, 18)) +
+    xlim(c(0,1)) +
+    labs(title = paste0("Rotated at ", deg, " degrees"),
+         x = "Proportion of cells with non-zero expression",
+         y = "-log10(adjusted p-value)",
+         col = "Confusion matrix\nlabel",
+         shape = "Confusion matrix\nlabel") +
+    theme_bw()
+  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_count_vs_pval_resolution_", resolution, "_rotation_deg_", deg, ".pdf")), dpi = 300)
+}
+
+
+
+# # sanity check
+# gene <- "Vmn1r53"
+# length(which(counts[gene,] > 0))
+# df_nonzero[df_nonzero$gene == gene,]
+# # plot single cell resolution
+# df_plt <- cbind(df_nonzero, df_perf_cf[df_perf_cf$resolution == "singlecell",c("padj", "confusion_matrix")]) %>%
+#   mutate(confusion_matrix = factor(confusion_matrix, levels = c("TP", "TN", "FP", "FN")))
+# ggplot(df_plt, aes(x = proportion, y = -log10(padj), col = confusion_matrix)) +
+#   geom_point() +
+#   geom_hline(yintercept = -log10(alpha), linetype = "dashed", color = "black") +
+#   labs(title = "single cell",
+#        x = "Proportion of cells with non-zero expression",
+#        y = "-log10(adjusted p-value)",
+#        col = "Confusion matrix\nlabel") +
+#   theme_bw()
 # plot rasterized resolution
+
 df_perf4_rast <- df_perf4[df_perf4$resolution != "singlecell",]
 for (deg in unique(df_perf4_rast$rotation_deg)) {
   df_plt <- do.call(rbind, lapply(unique(df_perf4_rast$resolution), function(res) {
