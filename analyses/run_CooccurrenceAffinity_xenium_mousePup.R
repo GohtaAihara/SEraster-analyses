@@ -181,7 +181,7 @@ for (res in res_list) {
 res_list <- list(100)
 
 device <- "MacStudio"
-n_cores <- 1
+n_cores <- 20
 
 if (device == "MacStudio") {
   bpparam <- BiocParallel::MulticoreParam(workers = n_cores)
@@ -252,7 +252,7 @@ runtime_results <- do.call(rbind, lapply(res_list, function(res) {
   }))
   return(data.frame(dataset = dataset_name, resolution = res, out))
 }))
-saveRDS(runtime_results, file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_runtime_", device, "_ncores=", n_cores, "_nitr=", n_itr, ".RDS")))
+saveRDS(runtime_results, file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_runtime_", device, "_n-core=", n_cores, "_n-itr=", n_itr, ".RDS")))
 
 # Plot --------------------------------------------------------------------
 
@@ -439,34 +439,36 @@ for (res in res_list) {
   ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_sym_clustering_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
 }
 
-## Figure (CooccurrenceAffinity heatmap, pyramid, vertical)
+## Figure 4 (CooccurrenceAffinity heatmap, pyramid, vertical)
 res <- 100
-## load data
+# load data
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
-## number of s.s. cooccurrence/separation
-table(df$pval <= 0.05)
-## number of s.s. cooccurrence
-table(df$pval <= 0.05 & df$alpha > 0)
-## create symmetric data
+# multiple test correction
+df$padj <- p.adjust(df$pval, method = "bonferroni")
+# number of s.s. cooccurrence/separation
+table(df$padj <= 0.05)
+# number of s.s. cooccurrence
+table(df$padj <= 0.05 & df$alpha > 0)
+# create symmetric data
 df_flipped <- df[df$celltypeA != df$celltypeB,]
 df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
 df_sym <- rbind(df, df_flipped)
-## use symmetric (redundant) data
-## reset label order
+# use symmetric (redundant) data
+# reset label order
 df_sym <- df_sym %>%
   mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
          celltypeB = factor(celltypeB, levels(ct_labels)),
-         significance = case_when(pval <= 0.05 ~ "*"))
-## reorganize into matrix
+         significance = case_when(padj <= 0.05 ~ "*"))
+# reorganize into matrix
 df_heatmap_sym <- cast(df_sym, celltypeA ~ celltypeB, value = "alpha")
 df_heatmap_sym <- df_heatmap_sym[,-1]
 isSymmetric.matrix(as.matrix(df_heatmap_sym))
-## cluster
+# cluster
 hc_sym <- hclust(dist(df_heatmap_sym))
-## reorder labels
+# reorder labels
 df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym$order])
 df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym$order])
-## plot
+# plot
 ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, label = significance)) +
   coord_fixed() +
   geom_tile(color = "gray") +
@@ -479,7 +481,7 @@ ggplot(df_sym, aes(x = celltypeA, y = celltypeB, fill = alpha, label = significa
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, vjust = 0, hjust=0),
         axis.text.y = element_text(angle = 45, vjust = 0, hjust=1))
-ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_sym_clustering_resolution_", res, "_pyramid.pdf")), width = 12, height = 10, dpi = 300)
+ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_sym_clustering_resolution_", res, "_pyramid_padj.pdf")), width = 12, height = 10, dpi = 300)
 
 # ## Figure (CooccurrenceAffinity heatmap, pyramid, horizontal)
 # res <- 100
@@ -589,32 +591,32 @@ for (clusters in niches) {
   ggsave(filename = here("plots", dataset_name, method, paste0("singlecell_niche_clusters_", paste(clusters, collapse = "_"), "_v2.pdf")), width = 6, height = 12, dpi = 300)
 }
 
-## Supplementary figure 2
+## Supplementary figure 4
 ## heatmap clustered at resolution 100 --> apply the same orders to other resolutions
 res_interest <- 100
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res_interest, ".RDS")))
 
-## create symmetric data
+# create symmetric data
 df_flipped <- df[df$celltypeA != df$celltypeB,]
 df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
 df_sym <- rbind(df, df_flipped)
 
-## use symmetric (redundant) data
-## reset label order
+# use symmetric (redundant) data
+# reset label order
 df_sym <- df_sym %>%
   mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
          celltypeB = factor(celltypeB, levels(ct_labels)))
-## reorganize into matrix
+# reorganize into matrix
 df_heatmap_sym <- cast(df_sym, celltypeA ~ celltypeB, value = "alpha")
 df_heatmap_sym <- df_heatmap_sym[,-1]
 rownames(df_heatmap_sym) <- colnames(df_heatmap_sym)
 isSymmetric.matrix(as.matrix(df_heatmap_sym))
-## cluster
+# cluster
 hc_sym_interest <- hclust(dist(df_heatmap_sym))
-## reorder labels (use hc_sym_interest)
+# reorder labels (use hc_sym_interest)
 df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym_interest$order])
 df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym_interest$order])
-## plot
+# plot
 cutoff <- min(abs(range(df_sym$alpha)))
 lim <- c(-cutoff,cutoff)
 # df_plt <- df_sym %>%
@@ -630,58 +632,61 @@ lim <- c(-cutoff,cutoff)
 #   theme_bw() +
 #   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-df_plt <- df_sym %>%
-  mutate(
-    alpha = Winsorize(alpha, min(lim), max(lim)),
-    significance = case_when(
-      pval <= 0.001 ~ "***",
-      pval <= 0.01 ~ "**",
-      pval <= 0.05 ~ "*"
-    )
-  )
-ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, label = significance)) +
-  coord_fixed() +
-  geom_tile(linewidth = 0.5) +
-  geom_text(angle = 45) +
-  scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
-  labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res_interest, ")"),
-       x = "Cluster A",
-       y = "Cluster B") +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# df_plt <- df_sym %>%
+#   mutate(
+#     alpha = Winsorize(alpha, min(lim), max(lim)),
+#     significance = case_when(
+#       pval <= 0.001 ~ "***",
+#       pval <= 0.01 ~ "**",
+#       pval <= 0.05 ~ "*"
+#     )
+#   )
+# ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, label = significance)) +
+#   coord_fixed() +
+#   geom_tile(linewidth = 0.5) +
+#   geom_text(angle = 45) +
+#   scale_fill_gradient2(name = "Alpha MLE", low = "blue", mid = "white", high = "red", limits = lim) +
+#   labs(title = paste0("Pair-wise cell type colocalization (Resolution = ", res_interest, ")"),
+#        x = "Cluster A",
+#        y = "Cluster B") +
+#   theme_bw() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-res_list <- list(50, 100, 200, 400)
+res_list <- list(50, 200, 400)
 for (i in seq_along(res_list)) {
   res <- res_list[[i]]
   df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
   
-  ## create symmetric data
+  # multiple test corrections
+  df$padj <- p.adjust(df$pval, method = "bonferroni")
+  
+  # create symmetric data
   df_flipped <- df[df$celltypeA != df$celltypeB,]
   df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
   df_sym <- rbind(df, df_flipped)
   
-  ## use symmetric (redundant) data
-  ## reset label order
+  # use symmetric (redundant) data
+  # reset label order
   df_sym <- df_sym %>%
     mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
            celltypeB = factor(celltypeB, levels(ct_labels)))
-  ## reorganize into matrix
+  # reorganize into matrix
   df_heatmap_sym <- cast(df_sym, celltypeA ~ celltypeB, value = "alpha")
   df_heatmap_sym <- df_heatmap_sym[,-1]
   rownames(df_heatmap_sym) <- colnames(df_heatmap_sym)
   isSymmetric.matrix(as.matrix(df_heatmap_sym))
   
-  ## reorder labels (use hc_sym_interest)
+  # reorder labels (use hc_sym_interest)
   df_sym$celltypeA <- factor(df_sym$celltypeA, levels = rownames(df_heatmap_sym)[hc_sym_interest$order])
   df_sym$celltypeB <- factor(df_sym$celltypeB, levels = colnames(df_heatmap_sym)[hc_sym_interest$order])
-  ## plot
+  # plot
   cutoff <- min(abs(range(df_sym$alpha)))
   lim <- c(-cutoff,cutoff)
   df_plt <- df_sym %>%
     mutate(
-      alpha = Winsorize(alpha, min(lim), max(lim)),
+      alpha = DescTools::Winsorize(alpha, min(lim), max(lim)),
       significance = case_when(
-        pval <= 0.05 ~ "*"
+        padj <= 0.05 ~ "*"
       )
     )
   # df_plt <- df_sym %>%
@@ -698,15 +703,15 @@ for (i in seq_along(res_list)) {
          y = "Cluster B") +
     theme_bw() +
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-  ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_sym_clustering_order_", res_interest, "_resolution_", res, ".pdf")), width = 12, height = 10, dpi = 300)
+  ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_heatmap_alpha_with_sym_clustering_order_", res_interest, "_resolution_", res, "_padj.pdf")), width = 12, height = 10, dpi = 300)
 }
 
 ## Figure (run time)
 # df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
 device <- "MacStudio"
-n_cores <- 1
+n_cores <- 20
 n_itr <- 5
-df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_runtime_", device, "_ncores=", n_cores, "_nitr=", n_itr, ".RDS")))
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_runtime_", device, "_n-core=", n_cores, "_n-itr=", n_itr, ".RDS")))
 df_plt <- df %>%
   pivot_longer(!c("dataset", "resolution", "trial", "num_pixels", "num_pairs"), names_to = "step", values_to = "time")
 

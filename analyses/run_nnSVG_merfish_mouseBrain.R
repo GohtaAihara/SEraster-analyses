@@ -1268,16 +1268,18 @@ col_ditto <- dittoSeq::dittoColors(reps = 1)
 for (resolution in resolutions) {
   df_plt <- data.frame(resolution = resolution, rotation_deg = deg, df_nonzero, df_perf_cf[df_perf_cf$resolution == resolution & df_perf_cf$rotation_deg == deg, c("padj", "confusion_matrix")]) %>%
     mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400")),
-           confusion_matrix = factor(confusion_matrix, levels = c("TP", "TN", "FP", "FN")))
+           confusion_matrix = factor(confusion_matrix, levels = c("TP", "TN", "FP", "FN")),
+           log10_padj = -log10(padj),
+           log10_padj_upperbound = ifelse(is.infinite(log10_padj), 17, log10_padj))
   df_plt_sub <- df_plt %>%
     filter(gene %in% genes)
-  ggplot(df_plt, aes(x = proportion, y = -log10(padj), col = confusion_matrix, shape = confusion_matrix)) +
+  ggplot(df_plt, aes(x = proportion, y = log10_padj_upperbound, col = confusion_matrix, shape = confusion_matrix)) +
     geom_point(size = 2) +
     geom_point(data = df_plt_sub, aes(x = proportion, y = -log10(padj)), size = 2, shape = 0, color = "red") +
     ggrepel::geom_text_repel(data = df_plt_sub, aes(x = proportion, y = -log10(padj), label = gene), color = "red") +
     geom_hline(yintercept = -log10(alpha), linetype = "dashed", color = "black") +
-    scale_color_manual(values = col_ditto[1:4]) +
-    # scale_shape_manual(values = c(16, 17, 15, 18)) +
+    scale_color_manual(values = c(col_ditto[1:3], col_ditto[7])) +
+    scale_shape_manual(values = c(16, 17, 15, 18)) +
     xlim(c(0,1)) +
     labs(title = paste0("Rotated at ", deg, " degrees"),
          x = "Proportion of cells with non-zero expression",
@@ -1285,7 +1287,7 @@ for (resolution in resolutions) {
          col = "Confusion matrix\nlabel",
          shape = "Confusion matrix\nlabel") +
     theme_bw()
-  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_count_vs_pval_resolution_", resolution, "_rotation_deg_", deg, ".pdf")), dpi = 300)
+  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_count_vs_pval_resolution_", resolution, "_rotation_deg_", deg, ".pdf")), width = 10, height = 8, dpi = 300)
 }
 
 
@@ -2028,30 +2030,276 @@ for (metric in metrics) {
   ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_comparison_across_sampling_methods_", metric, ".pdf")), width = 9, height = 4, dpi = 300)
 }
 
-## assess which genes contribute to the difference
+# ## Exploration (comparing aggregation function = "sum" vs. "mean")
+# # set resolution parameters
+# start_res <- 50
+# end_res <- 400
+# interval_res <- 10
+# res_list <- seq(start_res, end_res, by = interval_res)
+# res_list
+# # set permutation parameters
+# n_rotation <- 10
+# angle_deg_list <- seq(0, 360-0.1, by = 360/n_rotation)
+# # set aggregation function ("mean" or "sum")
+# fun <- "sum"
+# # set a threshold p value
+# alpha <- 0.05
+# # set metrics
+# # metrics <- c("TP", "FP", "TN", "FN", "TPR", "TNR", "PPV")
+# metrics <- c("TPR", "TNR", "PPV")
+# 
+# # load results (mean)
+# df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, "_", start_res, "-", end_res, "-by-", interval_res, ".RDS")))
+# df_mean <- df[df$resolution != "singlecell",]
+# # load results (sum)
+# df_sum <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_", "n_rotation_", n_rotation, "_", start_res, "-", end_res, "-by-", interval_res, "_fun_", fun, ".RDS")))
+# 
+# sc <- df[df$resolution == "singlecell",]
+# 
+# # compute performance
+# perf_mean <- do.call(rbind, lapply(res_list, function(res) {
+#   # skip if the dataset does not contain this resolution
+#   if (!res %in% unique(df_mean$resolution)) {
+#     return(NULL)
+#   } else {
+#     out <- do.call(rbind, lapply(seq_along(unique(df_mean$rotation_deg)), function(i) {
+#       deg <- unique(df_mean$rotation_deg)[i]
+#       print(paste0("SEraster (mean), Resolution = ", res, ", Angle = ", deg))
+#       sampled <- df_mean[df_mean$resolution == res & df_mean$rotation_deg == deg,]
+#       if (nrow(sampled) > 0) {
+#         results_sig <- do.call(rbind, lapply(sampled$gene, function(gene) {
+#           return(data.frame(gene = gene, pred = sampled[sampled$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
+#         }))
+#         out <- calculatePerformanceMetrics(results_sig)
+#         return(data.frame(permutation = i, out))
+#       }
+#     }))
+#     return(data.frame(method = "SEraster (mean)", resolution = res, out))
+#   }
+# }))
+# 
+# perf_sum <- do.call(rbind, lapply(res_list, function(res) {
+#   # skip if the dataset does not contain this resolution
+#   if (!res %in% unique(df_sum$resolution)) {
+#     return(NULL)
+#   } else {
+#     out <- do.call(rbind, lapply(seq_along(unique(df_sum$rotation_deg)), function(i) {
+#       deg <- unique(df_sum$rotation_deg)[i]
+#       print(paste0("SEraster (sum), Resolution = ", res, ", Angle = ", deg))
+#       sampled <- df_sum[df_sum$resolution == res & df_sum$rotation_deg == deg,]
+#       if (nrow(sampled) > 0) {
+#         results_sig <- do.call(rbind, lapply(sampled$gene, function(gene) {
+#           return(data.frame(gene = gene, pred = sampled[sampled$gene == gene, "padj"] <= alpha, obs = sc[sc$gene == gene, "padj"] <= alpha))
+#         }))
+#         out <- calculatePerformanceMetrics(results_sig)
+#         return(data.frame(permutation = i, out))
+#       }
+#     }))
+#     return(data.frame(method = "SEraster (sum)", resolution = res, out))
+#   }
+# }))
+# 
+# # combine
+# perf_comb <- rbind(perf_mean, perf_sum)
+# 
+# col_method_comparison <- dittoSeq::dittoColors(reps = 1)[4:7]
+# 
+# for (metric in metrics) {
+#   print(paste0("Plotting ", metric))
+#   
+#   df <- data.frame(perf_comb[,c("method", "resolution", "permutation")], values = perf_comb[,metric])
+#   
+#   df_summary <- df %>%
+#     group_by(method, resolution) %>%
+#     summarize(mean = mean(values), sd = sd(values))
+#   
+#   # plot
+#   if (metric %in% c("TP", "FP", "TN", "FN")) {
+#     set.seed(0)
+#     ggplot(df_summary, aes(x = resolution, y = mean, col = method, shape = method)) +
+#       # geom_jitter(data = df, aes(x = resolution, y = values, col = method), width = 5, alpha = 0.3, size = 2, stroke = 0) +
+#       geom_line() +
+#       geom_point(size = 2) +
+#       geom_errorbar(data = df_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = method), width = 5) +
+#       scale_color_manual(values = col_method_comparison) +
+#       # scale_x_continuous(breaks = unique(df$resolution)) +
+#       labs(title = metric,
+#            x = "Rasterization Resolution",
+#            y = "Performance",
+#            col = "Sampling Method",
+#            shape = "Sampling Method") +
+#       theme_bw() +
+#       theme(legend.position = "right")
+#   } else {
+#     set.seed(0)
+#     ggplot(df_summary, aes(x = resolution, y = mean, col = method, shape = method)) +
+#       # geom_jitter(data = df, aes(x = resolution, y = values, col = method), width = 5, alpha = 0.3, size = 2, stroke = 0) +
+#       geom_line() +
+#       geom_point(size = 2) +
+#       geom_errorbar(data = df_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = method), width = 5) +
+#       scale_color_manual(values = col_method_comparison) +
+#       # scale_x_continuous(breaks = unique(df$resolution)) +
+#       ylim(0,1) +
+#       labs(title = metric,
+#            x = "Rasterization Resolution",
+#            y = "Performance",
+#            col = "Sampling Method",
+#            shape = "Sampling Method") +
+#       theme_bw() +
+#       theme(legend.position = "right")
+#   }
+#   
+#   # save plot
+#   ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_comparison_across_sampling_methods_", metric, ".pdf")), width = 9, height = 4, dpi = 300)
+# }
+# 
+# # get svgs, non-svgs
+# svgs <- sc[sc$padj <= alpha,]$gene # 403
+# non_svgs <- sc[sc$padj > alpha,]$gene # 80
+# # mean
+# # add confusion matrix labels
+# df_cf_mean <- df_mean %>%
+#   mutate(confusion_matrix = case_when(
+#     gene %in% svgs & padj <= alpha ~ "TP",
+#     gene %in% non_svgs & padj > alpha ~ "TN",
+#     gene %in% non_svgs & padj <= alpha ~ "FP",
+#     gene %in% svgs & padj > alpha ~ "FN"
+#   )) %>%
+#   select(resolution, rotation_deg, gene, padj, confusion_matrix)
+# # subset to specific permutation
+# deg <- 0
+# df_cf_mean_deg <- df_cf_mean[df_cf_mean$rotation_deg == deg,]
+# # venn diagram analysis
+# x_mean = list(
+#   df_cf_mean_deg %>% filter(resolution == "50") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
+#   df_cf_mean_deg %>% filter(resolution == "100") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
+#   df_cf_mean_deg %>% filter(resolution == "200") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
+#   df_cf_mean_deg %>% filter(resolution == "400") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname()
+# )
+# names(x_mean) <- c("50", "100", "200", "400")
+# v.table_mean <- gplots::venn(x_mean)
+# fp_mean <- attr(v.table_mean, "intersections")$`50:100:200:400`
+# # sum
+# # add confusion matrix labels
+# df_cf_sum <- df_sum %>%
+#   mutate(confusion_matrix = case_when(
+#     gene %in% svgs & padj <= alpha ~ "TP",
+#     gene %in% non_svgs & padj > alpha ~ "TN",
+#     gene %in% non_svgs & padj <= alpha ~ "FP",
+#     gene %in% svgs & padj > alpha ~ "FN"
+#   )) %>%
+#   select(resolution, rotation_deg, gene, padj, confusion_matrix)
+# # subset to specific permutation
+# deg <- 0
+# df_cf_sum_deg <- df_cf_sum[df_cf_sum$rotation_deg == deg,]
+# # venn diagram analysis
+# x_sum = list(
+#   df_cf_sum_deg %>% filter(resolution == "50") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
+#   df_cf_sum_deg %>% filter(resolution == "100") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
+#   df_cf_sum_deg %>% filter(resolution == "200") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname(),
+#   df_cf_sum_deg %>% filter(resolution == "400") %>% filter(confusion_matrix == "FP") %>% select(gene) %>% unlist() %>% unname()
+# )
+# names(x_sum) <- c("50", "100", "200", "400")
+# v.table_sum <- gplots::venn(x_sum)
+# fp_sum <- attr(v.table_sum, "intersections")$`50:100:200:400`
+# 
+# # see common FPs at only mean
+# x_comb = list(
+#   fp_mean,
+#   fp_sum
+# )
+# names(x_comb) <- c("mean", "sum")
+# v.table_comb <- gplots::venn(x_comb)
+# fp_sum_only <- attr(v.table_comb, "intersections")$`sum`
+# 
+# # visualize
+# resolutions <- c("50", "100", "200", "400")
+# spe_50_mean <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 50, fun = "mean", BPPARAM = MulticoreParam())
+# spe_100_mean <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 100, fun = "mean", BPPARAM = MulticoreParam())
+# spe_200_mean <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 200, fun = "mean", BPPARAM = MulticoreParam())
+# spe_400_mean <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 400, fun = "mean", BPPARAM = MulticoreParam())
+# spe_rasterized_mean <- list(spe_50_mean, spe_100_mean, spe_200_mean, spe_400_mean)
+# names(spe_rasterized_mean) <- c("50", "100", "200", "400")
+# spe_50_sum <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 50, fun = "sum", BPPARAM = MulticoreParam())
+# spe_100_sum <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 100, fun = "sum", BPPARAM = MulticoreParam())
+# spe_200_sum <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 200, fun = "sum", BPPARAM = MulticoreParam())
+# spe_400_sum <- SEraster::rasterizeGeneExpression(spe, assay_name = "lognorm", resolution = 400, fun = "sum", BPPARAM = MulticoreParam())
+# spe_rasterized_sum <- list(spe_50_sum, spe_100_sum, spe_200_sum, spe_400_sum)
+# names(spe_rasterized_sum) <- c("50", "100", "200", "400")
+# 
+# # plot correlation between number of cells vs. rasterized gene expression for mean vs. sum
+# df_corr <- do.call(rbind, lapply(fp_sum_only, function(gene) {
+#   temp <- do.call(rbind, lapply(seq_along(resolutions), function(i) {
+#     # compute correlation for mean
+#     spe_rast_mean <- spe_rasterized_mean[[i]]
+#     cor_mean <- cor(colData(spe_rast_mean)$num_cell, assay(spe_rast_mean, "pixelval")[gene,], method = "spearman")
+#     # compute correlation for sum
+#     spe_rast_sum <- spe_rasterized_sum[[i]]
+#     cor_sum <- cor(colData(spe_rast_sum)$num_cell, assay(spe_rast_sum, "pixelval")[gene,], method = "spearman")
+#     return(data.frame(gene = gene, resolution = resolutions[[i]], cor_mean = cor_mean, cor_sum = cor_sum))
+#   }))
+# }))
+# for (i in resolutions) {
+#   df_corr_sub <- df_corr[df_corr$resolution == i,]
+#   ggplot(df_corr_sub, aes(x = cor_mean, y = cor_sum, label = gene)) +
+#     geom_point() +
+#     ggrepel::geom_text_repel() +
+#     geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") + 
+#     xlim(0,1) +
+#     ylim(0,1) +
+#     labs(title = paste0("Resolution: ", i),
+#          x = "Correlation of # of cells vs. rast. gexp. (mean)",
+#          y = "Correlation of # of cells vs. rast. gexp. (sum)") +
+#     theme_bw()
+#   ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_corr(num_cell_vs_gexp)_for_mean_vs_sum_resolution_", i, ".pdf")))
+# }
+# 
+# # plot number of cells, rasterized gexp (mean), rasterized gexp (sum)
+# gene <- "V1ra8"
+# 
+# for (i in seq_along(resolutions)) {
+#   ## num_cell
+#   # create sf data.frame with geometry (sfc_POLYGON) from colData
+#   df_sf <- sf::st_sf(geometry = colData(spe_rasterized_mean[[i]])$geometry, row.names = rownames(colData(spe_rasterized_mean[[i]])))
+#   df_sf <- cbind(df_sf, fill = colData(spe_rasterized_mean[[i]])$num_cell)
+#   # plot
+#   ggplot() +
+#     coord_fixed() +
+#     geom_sf(data = df_sf, aes(fill = fill)) +
+#     scale_fill_viridis_c(name = "num_cell") +
+#     theme_bw() +
+#     theme(panel.grid = element_blank())
+#   ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_gene_", gene, "_resolution_", resolutions[[i]], "_num_cell.pdf")))
+#   ## rasterized gexp(mean)
+#   plotRaster(spe_rasterized_mean[[i]], feature_name = gene, name = gene)
+#   ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_gene_", gene, "_resolution_", resolutions[[i]], "_gexp(mean).pdf")))
+#   ## rasterized gexp(sum)
+#   plotRaster(spe_rasterized_sum[[i]], feature_name = gene, name = gene)
+#   ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_gene_", gene, "_resolution_", resolutions[[i]], "_gexp(sum).pdf")))
+# }
 
-## Supplementary Figure x (visualizations of SOMDE nodes)
-res_list <- c(50, 100, 200, 400)
-
-plt_list <- lapply(res_list, function(res) {
-  spe_somde <- readRDS(file = here("outputs", paste0(dataset_name, "_spe_somde_resolution_", res, ".RDS")))
-  
-  df <- data.frame(spatialCoords(spe_somde), gexp = colSums(assay(spe_somde, "lognorm")))
-  
-  plt <- ggplot() +
-    coord_fixed() +
-    geom_point(data = data.frame(spatialCoords(spe)), aes(x = x, y = y), color = "lightgray", size = 1, stroke = 0) +
-    geom_point(data = df, aes(x = x, y = y, col = gexp), size = 1, stroke = 0) +
-    scale_color_viridis_c() +
-    labs(title = paste0("resolution = ", res, "\nnumber of nodes = ", dim(df)[1]),
-         col = "SOMDE node\n(lognorm)\ntotal gexp") +
-    theme_bw()
-  
-  return(plt)
-})
-
-plt_comb <- gridExtra::grid.arrange(grobs = plt_list)
-ggsave(plt_comb, filename = here("plots", dataset_name, paste0(dataset_name, "_somde_node_visualizations.pdf")))
+# ## Exploration (visualizations of SOMDE nodes)
+# res_list <- c(50, 100, 200, 400)
+# 
+# plt_list <- lapply(res_list, function(res) {
+#   spe_somde <- readRDS(file = here("outputs", paste0(dataset_name, "_spe_somde_resolution_", res, ".RDS")))
+#   
+#   df <- data.frame(spatialCoords(spe_somde), gexp = colSums(assay(spe_somde, "lognorm")))
+#   
+#   plt <- ggplot() +
+#     coord_fixed() +
+#     geom_point(data = data.frame(spatialCoords(spe)), aes(x = x, y = y), color = "lightgray", size = 1, stroke = 0) +
+#     geom_point(data = df, aes(x = x, y = y, col = gexp), size = 1, stroke = 0) +
+#     scale_color_viridis_c() +
+#     labs(title = paste0("resolution = ", res, "\nnumber of nodes = ", dim(df)[1]),
+#          col = "SOMDE node\n(lognorm)\ntotal gexp") +
+#     theme_bw()
+#   
+#   return(plt)
+# })
+# 
+# plt_comb <- gridExtra::grid.arrange(grobs = plt_list)
+# ggsave(plt_comb, filename = here("plots", dataset_name, paste0(dataset_name, "_somde_node_visualizations.pdf")))
 
 # Further exploration -----------------------------------------------------
 

@@ -119,7 +119,7 @@ saveRDS(nnsvg_results, file = here("outputs", paste0(dataset_name, "_nnsvg_ct_sp
 res_list <- list(100)
 
 device <- "MacStudio"
-n_cores <- 1
+n_cores <- 20
 
 if (device == "MacStudio") {
   bpparam <- BiocParallel::MulticoreParam(workers = n_cores)
@@ -152,7 +152,7 @@ runtime_results <- do.call(rbind, lapply(res_list, function(res) {
   }))
   return(data.frame(dataset = dataset_name, resolution = res, out))
 }))
-saveRDS(runtime_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_", device, "_n=", n_itr, ".RDS")))
+saveRDS(runtime_results, file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_", device, "_n-core=", n_cores, "_n-itr=", n_itr, ".RDS")))
 
 ## test single-cell resolution
 system.time({
@@ -381,7 +381,7 @@ res_list <- list(100, 200, 400, 800)
 
 for (res in res_list) {
   ## rasterize
-  spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "counts", resolution = res, fun = "sum", BPPARAM = BiocParallel::MulticoreParam())
+  spe_rast <- SEraster::rasterizeGeneExpression(spe, assay_name = "counts", resolution = res, fun = "mean", BPPARAM = BiocParallel::MulticoreParam())
   
   ## plot
   df <- data.frame(x = spatialCoords(spe_rast)[,1], y = spatialCoords(spe_rast)[,2], transcripts = colSums(assay(spe_rast)))
@@ -941,8 +941,9 @@ ggsave(filename = here("plots", dataset_name, method, paste0(dataset_name, "_nns
 ## Figure (run time)
 # df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime.RDS")))
 device <- "MacStudio"
+n_cores <- 20
 n_itr <- 5
-df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_", device, "_n=", n_itr, ".RDS")))
+df <- readRDS(file = here("outputs", paste0(dataset_name, "_nnsvg_global_runtime_", device, "_n-core=", n_cores, "_n-itr=", n_itr, ".RDS")))
 df_plt <- df %>%
   pivot_longer(!c("dataset", "resolution", "trial", "num_pixels"), names_to = "step", values_to = "time")
 

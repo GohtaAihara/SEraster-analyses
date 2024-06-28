@@ -300,13 +300,16 @@ res_list <- list(50, 100, 200)
 for (i in seq_along(res_list)) {
   res <- res_list[[i]]
   df <- readRDS(file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+
+  # multiple test correction
+  df$padj <- p.adjust(df$pval, method = "bonferroni")
   
   cutoff <- min(abs(range(df$alpha)))
   lim <- c(-cutoff,cutoff)
   df_plt <- df %>%
     mutate(
       alpha = Winsorize(alpha, min(lim), max(lim)),
-      significance = case_when(pval <= 0.05 ~ "*")
+      significance = case_when(padj <= 0.05 ~ "*")
     )
   ggplot(df_plt, aes(x = celltypeA, y = celltypeB, fill = alpha, label = significance)) +
     coord_fixed() +

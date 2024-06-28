@@ -128,6 +128,7 @@ for (res in res_list) {
       )
     }
   }))
+  
   ## save results
   saveRDS(affinity_results, file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
 }
@@ -469,6 +470,9 @@ for (i in seq(nrow(df_res_k))) {
 res <- 400
 df <- readRDS(file = here("outputs", paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
 
+# multiple test correction
+df$padj <- p.adjust(df$pval, method = "bonferroni")
+
 # create symmetric data
 df_flipped <- df[df$celltypeA != df$celltypeB,]
 df_flipped[,c("celltypeA", "celltypeB")] <- df_flipped[,c("celltypeB", "celltypeA")]
@@ -478,7 +482,7 @@ df_sym <- rbind(df, df_flipped)
 df_sym <- df_sym %>%
   mutate(celltypeA = factor(celltypeA, levels(ct_labels)),
          celltypeB = factor(celltypeB, levels(ct_labels)),
-         significance = case_when(pval <= 0.05 ~ "*", pval > 0.05 ~ ""))
+         significance = case_when(padj <= 0.05 ~ "*", padj > 0.05 ~ ""))
 
 df_plt <- as.matrix(cast(df_sym, celltypeA ~ celltypeB, value = "alpha"))
 df_plt_sig <- as.matrix(cast(df_sym, celltypeA ~ celltypeB, value = "significance"))
@@ -486,7 +490,7 @@ df_plt_sig <- as.matrix(cast(df_sym, celltypeA ~ celltypeB, value = "significanc
 # cluster with hclust
 hc_sym <- hclust(dist(df_plt), method = "complete")
 
-# heatmap, pyramid shape (without split and dendrogram)
+# heatmap, pyramid shape (without split and dendrogram), statistical significance based on raw p-values
 set.seed(0)
 heatmap <- ComplexHeatmap::Heatmap(
   df_plt,
@@ -511,7 +515,8 @@ heatmap <- ComplexHeatmap::Heatmap(
   rect_gp = gpar(col = "white", lwd = 2),
   show_heatmap_legend = FALSE
 )
-tidyHeatmap::save_pdf(heatmap, filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_heatmap_resolution_", res, "hclust_method_complete_pyramid.pdf")), width = 12, height = 12)
+# tidyHeatmap::save_pdf(heatmap, filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_heatmap_resolution_", res, "hclust_method_complete_pyramid.pdf")), width = 12, height = 12)
+tidyHeatmap::save_pdf(heatmap, filename = here("plots", dataset_name, method, res, paste0(dataset_name, "_donor_", donor, "_tissue_location_", tissue_location, "_CooccurrenceAffinity_heatmap_resolution_", res, "hclust_method_complete_pyramid_padj.pdf")), width = 12, height = 12)
 
 # plot single-cell visualizations of cell-types in each niche
 # # resolution = 50
