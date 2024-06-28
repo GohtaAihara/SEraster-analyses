@@ -52,3 +52,4 @@ outputs/xenium_mousePup_preprocessed.RDS
 
 # Virtual Environment
 venv/
+outputs/merfish_mouseBrain_lognorm.csv
