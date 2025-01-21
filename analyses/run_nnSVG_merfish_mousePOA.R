@@ -21,6 +21,7 @@ library(tibble)
 library(dplyr)
 library(rearrr)
 library(UpSetR)
+library(ggpubr)
 
 par(mfrow=c(1,1))
 
@@ -181,11 +182,10 @@ spe_rast <- try({
 
 # Plot --------------------------------------------------------------------
 #df <- readRDS(file = here("outputs", paste0(dataset_name, "_animal1", "_sex", sex, "_behavior", behavior, "_bregma_-0.19", "_nnsvg_global_", "n_rotation_", n_rotation, ".RDS")))
-
 animal <- 1
 sex <- "Female"
 behavior <- "Naive"
-bregma <- 
+bregma <- "-0.29"
 
 animals <- unique(data$Animal_ID)
 sexes <- unique(data$Animal_sex)
@@ -250,18 +250,18 @@ for (animal in animals) {
               # select(resolution, TPR, TNR, PPV) %>%
               # pivot_longer(!resolution, names_to = "metrics", values_to = "values")
             
-            ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
-              geom_jitter(width = 10, alpha = 0.3, size = 2, stroke = 0) +
-              geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
-              geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
-              geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics), width = 10) +
-              scale_x_continuous(breaks = unique(df_perf2$resolution)) + 
-              ylim(0,1) +
-              labs(title = "Performance",
-                   x = "Rasterization Resolution",
-                   y = "Performance",
-                   col = "Metric") +
-              theme_bw()
+              # ggplot(df_perf2, aes(x = resolution, y = values, col = metrics)) +
+              #   geom_jitter(width = 10, alpha = 0.3, size = 2, stroke = 0) +
+              #   geom_line(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics)) +
+              #   geom_point(data = df_perf_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
+              #   geom_errorbar(data = df_perf_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics), width = 10) +
+              #   scale_x_continuous(breaks = unique(df_perf2$resolution)) + 
+              #   ylim(0,1) +
+              #   labs(title = "Performance",
+              #        x = "Rasterization Resolution",
+              #        y = "Performance",
+              #        col = "Metric") +
+              #   theme_bw()
             
            
             #ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_perf_metric_summary.pdf")), width = 6, heigh = 5, dpi = 300)
@@ -290,13 +290,8 @@ for (animal in animals) {
   }
 }
 
-
-
 # plot performance for biological replicates  -----------------------------
-
-
 df_perf_all <- na.omit(df_perf_all)
-  
 
 # 50TPR ######
 df_50TPR <- df_perf_all[df_perf_all$resolution == 50 & df_perf_all$metrics == "TPR", ]
@@ -355,26 +350,28 @@ df_perf_all_summary <- data.frame(
                        sd_200TPR, sd_200TNR, sd_200PPV))
 
 # df_perf_all_summary <- df_perf_all  %>%
-#   group_by(resolution, metrics) %>%
-#   summarise(mean = mean(mean), sd = sd(mean))
+#    group_by(resolution, metrics) %>%
+#    summarise(mean = mean(mean), sd = sd(mean))
 
 ## plot all biological replicate results
 # df_perf2 is not the correct df
 ggplot(df_perf_all, aes(x = resolution, y = mean, col = metrics)) +
-  geom_jitter(width = 10, alpha = 0.3, size = 2, stroke = 0) +
+  geom_jitter(width = 10, alpha = 0.3, size = 1.7, stroke = 0) +
   geom_line(data = df_perf_all_summary, aes(x = resolution, y = mean, col = metrics)) +
-  geom_point(data = df_perf_all_summary, aes(x = resolution, y = mean, col = metrics), size = 1) +
+  geom_point(data = df_perf_all_summary, aes(x = resolution, y = mean, col = metrics), size = 2.5) +
   geom_errorbar(data = df_perf_all_summary, aes(x = resolution, y = mean, ymin = mean-sd, ymax = mean+sd, col = metrics), width = 10) +
   scale_x_continuous(breaks = unique(df_perf_all$resolution)) + 
   ylim(0,1) +
-  labs(title = "Performance",
+  labs(title = "Performance summary of 83 naive mPOA conditions",
        x = "Rasterization Resolution",
-       y = "Performance",
+       y = "",
        col = "Metric") +
-  theme_bw()
-        
-ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "biological_replicates_perf_metric_summary.pdf")), width = 6, heigh = 5, dpi = 300)
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold"))
 
+        
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_biological_replicates_perf_metric_summary.pdf")), width = 6, heigh = 5, dpi = 300)
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_biological_replicates_perf_metric_summary.png")), width = 6, heigh = 5, dpi = 300)
 
 # upset plot --------------------------------------------------------------
 
@@ -385,17 +382,27 @@ u_df <- data.frame(gene = df$gene,
 
 sc_df <- u_df[u_df$resolution == "singlecell", ]
 res_50 <- u_df[u_df$resolution == 50, ]
+res_50 <- res_50[1:155, ]
 res_100 <- u_df[u_df$resolution == 100, ]
+res_100 <- res_100[1:155, ]
 res_200 <- u_df[u_df$resolution == 200, ]
+res_200 <- res_200[1:155, ]
 
+# the dataframe shows the comparison of each gene's significance across all resolutions
 upset_df <- data.frame(gene = sc_df$gene,
                    sc = sc_df$identified,
                    r50 = res_50$identified,
                    r100 = res_100$identified,
                    r200 = res_200$identified)
 
-upset(upset_df)
-intersect(sc_df, res_50)
+upset(upset_df, 
+      sets = c("sc", "r50", "r100", "r200"), 
+      keep.order = TRUE, 
+      sets.x.label = "# of significant SVGs")
+
+# doesn't save graph properly
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_upset_plot.pdf")), width = 6, heigh = 5, dpi = 300)
+
 
 ## identify which genes + visualize their patterns
 # at 50um
@@ -406,54 +413,74 @@ intersect(sc_df, res_50)
 
 gene <- rownames(spe)
 
-df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = colSums(assay(spe, "lognorm")[gene,]))
+plot_df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = colSums(assay(spe, "lognorm")[gene,]))
+ggplot(plot_df, aes(x = x, y = y, col = gene)) +
+  coord_fixed() +
+  geom_point(size = 1, stroke = 0) +
+  scale_color_viridis_c() +
+  theme_bw() +
+  theme(
+    #legend.position="none",
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
 
-df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = (assay(spe, "lognorm")["Rgs5",]))
-
-plot_sc <- ggplot(df, aes(x = x, y = y, col = gene)) +
+ssvg <- "Aldh1l1"
+ssvg_sc_df <- data.frame(x = spatialCoords(spe)[,1], y = spatialCoords(spe)[,2], gene = (assay(spe, "lognorm")["Aldh1l1",]))
+plot_sc <- ggplot(ssvg_sc_df, aes(x = x, y = y, col = gene)) +
       coord_fixed() +
       geom_point(size = 1, stroke = 0) +
       scale_color_viridis_c() +
+      labs(color = "", title = "A") +
       theme_bw() +
         theme(
-           #legend.position="none",
+           plot.title = element_text(face = "bold"),
            panel.grid = element_blank(),
            axis.title = element_blank(),
            axis.text = element_blank(),
            axis.ticks = element_blank(),
         )
 
-# 50 
-rastGexp50 <- SEraster::rasterizeGeneExpression(merfish_mousePOA, assay_name="volnorm", resolution = 50)
-rastGexp100 <- SEraster::rasterizeGeneExpression(merfish_mousePOA, assay_name="volnorm", resolution = 100)
-rastGexp200 <- SEraster::rasterizeGeneExpression(merfish_mousePOA, assay_name="volnorm", resolution = 200)
+data("merfish_mousePOA")
+assayNames(merfish_mousePOA)
 
-only_FN_at_50 <- "Rgs5"
+rast50 <- SEraster::rasterizeGeneExpression(spe, assay_name="lognorm", resolution = 50, fun = "sum")
+rast100 <- SEraster::rasterizeGeneExpression(spe, assay_name="lognorm",, resolution = 100, fun = "sum")
+rast200 <- SEraster::rasterizeGeneExpression(spe, assay_name="lognorm",, resolution = 200, fun = "sum")
 
-# only FN at 50
-plot_50 <- SEraster::plotRaster(rastGexp50, feature_name = only_FN_at_50, name = only_FN_at_50)
-plot_100 <- SEraster::plotRaster(rastGexp100, feature_name = only_FN_at_50, name = only_FN_at_50)
-plot_200 <- SEraster::plotRaster(rastGexp200, feature_name = only_FN_at_50, name = only_FN_at_50)
+#rast50 <- SEraster::rasterizeGeneExpression(merfish_mousePOA, assay_name="volnorm", resolution = 50, fun = "mean")
 
-ggarrange(plot_sc, 
+# these are the same
+SEraster::plotRaster(rast50[3], plotTitle = "B")
+SEraster::plotRaster(rast100[3], feature_name = "sum", plotTitle = "B", name = "")
+SEraster::plotRaster(rast200[3], feature_name = "sum", plotTitle = "B", name = "") +
+  ggtitle(expression(bold("B")))
+
+plot_50 <- SEraster::plotRaster(rast50, feature_name = ssvg, plotTitle = "B", name = "") +
+  ggtitle(expression(bold("B")))
+plot_100 <- SEraster::plotRaster(rast100, feature_name = ssvg, plotTitle = "C", name = "") +
+  ggtitle(expression(bold("C")))
+plot_200 <- SEraster::plotRaster(rast200, feature_name = ssvg, plotTitle = "D", name = "") +
+  ggtitle(expression(bold("D")))
+
+four_plots <- ggarrange(plot_sc, 
           plot_50, 
           plot_100, 
-          plot_200, 
-          labels = c("Single Cell", "50 um", "100 um", "200 um"), 
+          plot_200,
           ncol = 2, 
-          nrow = 2) #,
-          #top = "Gene expression pattern of Rgs5 across resolutions")
+          nrow = 2)
 
-# only FP at 50
-SEraster::plotRaster(rastGexp50, feature_name = "Avpr2", name = "Avpr2")
-SEraster::plotRaster(rastGexp100, feature_name = "Avpr2", name = "Avpr2")
-SEraster::plotRaster(rastGexp200, feature_name = "Avpr2", name = "Avpr2")
+library(grid)
+ 
+annotate_figure(four_plots, 
+                top = text_grob(bquote(bolditalic("Aldh1l1")~ bold(" expression at single cell and rasterized resolutions")),
+                                size = 14))
 
-# only TP at 200 um
-SEraster::plotRaster(rastGexp50, feature_name = "Klf4", name = "Klf4")
-SEraster::plotRaster(rastGexp100, feature_name = "Klf4", name = "Klf4")
-SEraster::plotRaster(rastGexp200, feature_name = "Klf4", name = "Klf4")
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_4_resolutions.pdf")), width = 6, heigh = 5, dpi = 300)
 
+ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_4_resolutions.png")), width = 6, heigh = 5, dpi = 300)
 
 # plot proportion of cells and non-zero expression ------------------------
 
@@ -512,30 +539,33 @@ df_perf4_rast <- df_perf4[df_perf4$resolution != "singlecell",]
 for (deg in unique(df_perf4_rast$rotation_deg)) {
   df_plt <- do.call(rbind, lapply(unique(df_perf4_rast$resolution), function(res) {
     temp <- data.frame(resolution = res, rotation_deg = deg, df_nonzero, df_perf4_rast[df_perf4_rast$resolution == res & df_perf4_rast$rotation_deg == deg, c("padj", "confusion_matrix")]) %>%
-      mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200", "400")),
+      mutate(resolution = factor(resolution, levels = c("singlecell", "50", "100", "200")),
              confusion_matrix = factor(confusion_matrix, levels = c("TP", "TN", "FP", "FN")))
   }))
   ggplot(df_plt, aes(x = proportion, y = -log10(padj), col = confusion_matrix)) +
     facet_wrap(~resolution) +
     geom_point(size = 1.5, stroke = 0) +
     geom_hline(yintercept = -log10(alpha), linetype = "dashed", color = "black") +
+    scale_shape_manual(values = col) +  # Here 8 is a st
     labs(title = paste0("Rotated at ", deg, " degrees"),
          x = "Proportion of cells with non-zero expression",
          y = "-log10(adjusted p-value)",
          col = "Confusion matrix\nlabel") +
     theme_bw()
-  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_proportion_vs_pval_rotation_deg_", deg, ".png")))
+  ##ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_proportion_vs_pval_rotation_deg_", deg, ".png")))
   ggplot(df_plt, aes(x = count, y = -log10(padj), col = confusion_matrix)) +
     facet_wrap(~resolution) +
     geom_point(size = 1.5, stroke = 0) +
     geom_hline(yintercept = -log10(alpha), linetype = "dashed", color = "black") +
+    
     labs(title = paste0("Rotated at ", deg, " degrees"),
          x = "Number of cells with non-zero expression",
          y = "-log10(adjusted p-value)",
          col = "Confusion matrix\nlabel") +
     theme_bw()
-  ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_count_vs_pval_rotation_deg_", deg, ".png")))
+  ##ggsave(filename = here("plots", dataset_name, paste0(dataset_name, "_count_vs_pval_rotation_deg_", deg, ".png")))
 }
+
 
 # plot same bregma across animals -----------------------------------------
 

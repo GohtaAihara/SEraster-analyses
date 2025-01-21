@@ -21,14 +21,146 @@ library(tidyr)
 library(tibble)
 library(dplyr)
 library(reshape)
-library(DescTools)
 
 par(mfrow=c(1,1))
 
 dataset_name <- "merfish_mousePOA"
+data("merfish_mousePOA")
 method <- "CooccurrenceAffinity"
 
 # Load dataset ------------------------------------------------------------
+
+spe <- merfish_mousePOA
+
+ct_labels <- colData(spe)$celltype
+
+# Run methods -------------------------------------------------------------
+
+## compute relative enrichment and binarize for various resolutions
+#res_list <- list(50, 100, 200, 400)
+
+## parameters for CooccurrenceAffinity
+## set confidence interval method ("CP", "Blaker", "midQ", or "midP")
+CI_method <- "Blaker"
+## create a dictionary and index of CI method
+CI_method_dict <- c("CP" = 6, "Blaker" = 7, "midQ" = 8, "midP" = 9)
+## set confidence interval level (default = 0.95)
+CI_lev <- 0.95
+## set pval method ("Blaker" or "midP", default = "Blaker")
+pval_method <- "Blaker"
+
+res <- 100
+spe_rast <- SEraster::rasterizeCellType(spe, 
+                                        "celltype", 
+                                        resolution = res, 
+                                        fun = "sum")
+
+## compute relative enrichment (RE) metric (the output is dense matrix)
+mat <- assay(spe_rast, "pixelval")
+mat_re <- do.call(rbind, lapply(rownames(spe_rast), function(ct_label) {
+  ## relative enrichment = celltype observed / celltype expected = celltype observed / (celltype frequency * total # of cells in the pixel)
+  mat[ct_label,] / (sum(mat[ct_label,]) / sum(mat) * colSums(mat))
+}))
+rownames(mat_re) <- rownames(mat)
+
+## binarize (1 if RE >= 1, 0 if RE < 1)
+mat_bin <- ifelse(mat_re >= 1, 1, 0)
+
+## add RE and binary layers to SpatialExperiment object
+assays(spe_rast) <- list(pixelval = assay(spe_rast, "pixelval"), re = mat_re, bin = mat_bin)
+saveRDS(spe_rast, file = here("outputs", paste0(dataset_name, "_rasterized_resolution_", res, "_binarized.RDS")))
+
+## compute affinity MLE using CooccurrenceAffinity (store the log-affinity metric, CI, and pvalue for each pair)
+## get pair combinations
+ct_labels <- merfish_mousePOA$celltype; names(ct) <- colnames(merfish_mousePOA)
+ct_labels <- as.factor(ct_labels)
+non_self <- combn(levels(ct_labels), 2, simplify = FALSE)
+self <- lapply(levels(ct_labels), function(ct_label) c(ct_label, ct_label))
+pairs <- c(non_self, self)
+
+## multiply pixel values for each pair of cell types
+affinity_results <- do.call(rbind, lapply(pairs, function(pair) {
+  ## create a 2x2 contingency table of counts
+  cont_tab <- table(factor(mat_bin[pair[1],], levels = c(0,1)), factor(mat_bin[pair[2],], levels = c(0,1)))
+  X <- cont_tab[2,2]
+  mA <- sum(cont_tab[2,])
+  mB <- sum(cont_tab[,2])
+  N <- sum(cont_tab)
+  
+  out <- CooccurrenceAffinity::ML.Alpha(X,c(mA,mB,N), lev = CI_lev, pvalType = pval_method)
+  
+  ## set index for the chosen CI method
+  CI_idx <- CI_method_dict[CI_method][[1]]
+  
+  return(data.frame(
+    pair = paste(pair, collapse = " & "),
+    celltypeA = factor(pair[1], levels = levels(ct_labels)),
+    celltypeB = factor(pair[2], levels = levels(ct_labels)),
+    X = X,
+    mA = mA,
+    mB = mB,
+    N = N,
+    alpha = out$est, ci.min = out[CI_idx][[1]][1], 
+    ci.max = out[CI_idx][[1]][2], 
+    pval = out$pval)
+  )
+}))
+## save results
+saveRDS(affinity_results, file = here("outputs", paste0(dataset_name, "_CooccurrenceAffinity_resolution_", res, ".RDS")))
+
+# Plot --------------------------------------------------------------------
+
+col_clu <- gg_color_hue(length(levels(ct_labels)))
+
+## Figure (single cell spatial visualization)
+df <- data.frame(spatialCoords(spe), colData(spe))
+ggplot(df, aes(x = x, y = y, col = celltype)) +
+  coord_fixed() +
+  rasterize(geom_point(size = 0.1, stroke = 0), dpi = 300) +
+  scale_color_manual(values = col_clu) +
+  labs(title = "Single cell",
+       col = "Cluster") +
+  guides(col = guide_legend(override.aes = list(size = 3))) +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+  )
+
+## Figure (rasterized spatial visualization)
+res <- 100
+spe_rast <- readRDS(file = here("outputs", paste0(dataset_name, "_rasterized_resolution_", res, "_binarized.RDS")))
+ct_label <- "1"
+
+
+df <- data.frame(x = spatialCoords(spe_rast)[,1], 
+                 y = spatialCoords(spe_rast)[,2], 
+                 pixelval = assay(spe_rast, "pixelval")[ct_labels,], 
+                 re = assay(spe_rast, "re")[ct_labels,], 
+                 bin = factor(assay(spe_rast, "bin")[ct_labels,], 
+                 levels = c(0,1)))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 data <- read.csv('~/Downloads/lab/data/merfish_mousePOA_all_cells.csv')
 
